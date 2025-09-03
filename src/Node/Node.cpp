@@ -25,6 +25,8 @@
 
 #include "Node.hpp"
 
+#include "CircuitElement.hpp"
+
 void Node::traverse(std::map<std::string, int> &indexMap,
                     std::vector<std::vector<double>> &mna,
                     std::vector<double> &rhs)
@@ -46,9 +48,9 @@ void Node::traverse(std::map<std::string, int> &indexMap,
         edge->circuitElement->processed = true;
 
         // Resistor
-        if (edge->circuitElement->type == R) {
+        if (edge->circuitElement->type == ElementType::R) {
             // Group 1
-            if (edge->circuitElement->group == G1) {
+            if (edge->circuitElement->group == Group::G1) {
                 // When source node is connected to ground
                 if (edge->circuitElement->nodeA.compare("0") == 0) {
                     int vminus = indexMap[edge->circuitElement->nodeB];
@@ -107,9 +109,9 @@ void Node::traverse(std::map<std::string, int> &indexMap,
             }
         }
         // Capacitor
-        else if (edge->circuitElement->type == C) {
+        else if (edge->circuitElement->type == ElementType::C) {
             // Group 1
-            if (edge->circuitElement->group == G1) {
+            if (edge->circuitElement->group == Group::G1) {
             }
             // Group 2
             else {
@@ -119,7 +121,7 @@ void Node::traverse(std::map<std::string, int> &indexMap,
             }
         }
         // Inductor (always Group 2)
-        else if (edge->circuitElement->type == L) {
+        else if (edge->circuitElement->type == ElementType::L) {
             // When source node is connected to ground
             if (edge->circuitElement->nodeA.compare("0") == 0) {
                 int vminus = indexMap[edge->circuitElement->nodeB];
@@ -150,9 +152,9 @@ void Node::traverse(std::map<std::string, int> &indexMap,
             }
         }
         // Independent Current Source
-        else if (edge->circuitElement->type == I) {
+        else if (edge->circuitElement->type == ElementType::I) {
             // Group 1
-            if (edge->circuitElement->group == G1) {
+            if (edge->circuitElement->group == Group::G1) {
                 // When source node is connected to ground
                 if (edge->circuitElement->nodeA.compare("0") == 0) {
                     int vminus = indexMap[edge->circuitElement->nodeB];
@@ -208,7 +210,7 @@ void Node::traverse(std::map<std::string, int> &indexMap,
             }
         }
         // Independent Voltage Source (always Group 2)
-        else if (edge->circuitElement->type == V) {
+        else if (edge->circuitElement->type == ElementType::V) {
             // When source node is connected to ground
             if (edge->circuitElement->nodeA.compare("0") == 0) {
                 int vminus = indexMap[edge->circuitElement->nodeB];
@@ -241,9 +243,10 @@ void Node::traverse(std::map<std::string, int> &indexMap,
             }
         }
         // Dependant Voltage Source (always Group 2)
-        else if (edge->circuitElement->type == Vc) {
+        else if (edge->circuitElement->type == ElementType::Vc) {
             // Current Controlled Voltage Source (CCVS)
-            if (edge->circuitElement->controlling_variable == i) {
+            if (edge->circuitElement->controlling_variable ==
+                ControlVariable::i) {
                 // When source node is connected to ground
                 if (edge->circuitElement->nodeA.compare("0") == 0) {
                     int vminus = indexMap[edge->circuitElement->nodeB];
@@ -425,9 +428,10 @@ void Node::traverse(std::map<std::string, int> &indexMap,
             }
         }
         // Dependant Current Source (always Group 1)
-        else if (edge->circuitElement->type == Ic) {
+        else if (edge->circuitElement->type == ElementType::Ic) {
             // Current Controlled Current Source (CCCS)
-            if (edge->circuitElement->controlling_variable == i) {
+            if (edge->circuitElement->controlling_variable ==
+                ControlVariable::i) {
                 // When source node is connected to ground
                 if (edge->circuitElement->nodeA.compare("0") == 0) {
                     int vminus = indexMap[edge->circuitElement->nodeB];

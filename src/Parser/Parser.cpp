@@ -34,9 +34,11 @@
 #include <ostream>
 #include <sstream>
 
+#include "CircuitElement.hpp"
+
 using std::cout, std::endl;
 
-int Parser::parse(const std::string &fileName)
+int Parser::parse(const std::string& fileName)
 {
     cout << "\nFile Name: " + fileName << endl;
 
@@ -76,7 +78,7 @@ int Parser::parse(const std::string &fileName)
         }
 
         // Checks whether the value is actual double and not zero
-        char *end = 0;
+        char* end = 0;
         double value = strtod(tokens.at(3).c_str(), &end);
         if (end == tokens.at(3).c_str() || *end != '\0' || value == HUGE_VAL ||
             value == 0) {
@@ -91,12 +93,13 @@ int Parser::parse(const std::string &fileName)
             std::shared_ptr<CircuitElement> temp =
                 std::make_shared<CircuitElement>();
             temp->name = tokens.at(0);
-            temp->type = Ic;
+            temp->type = ElementType::Ic;
             temp->nodeA = tokens.at(1);
             temp->nodeB = tokens.at(2);
-            temp->group = G1;
+            temp->group = Group::G1;
             temp->value = value;
-            temp->controlling_variable = (tokens.at(4) == "V") ? v : i;
+            temp->controlling_variable =
+                (tokens.at(4) == "V") ? ControlVariable::v : ControlVariable::i;
 
             // Data Validation: Illegal controlling variable argument
             if (tokens.at(4) != "V" && tokens.at(4) != "I") {
@@ -113,7 +116,7 @@ int Parser::parse(const std::string &fileName)
                      << (lineNumber - 1) << ": " + line << end;
                 error += 1;
 
-                temp->controlling_variable = none;
+                temp->controlling_variable = ControlVariable::none;
                 temp->controlling_element = NULL;
             } else {
                 temp->controlling_element = std::make_shared<CircuitElement>();
@@ -135,12 +138,13 @@ int Parser::parse(const std::string &fileName)
             std::shared_ptr<CircuitElement> temp =
                 std::make_shared<CircuitElement>();
             temp->name = tokens.at(0);
-            temp->type = Vc;
+            temp->type = ElementType::Vc;
             temp->nodeA = tokens.at(1);
             temp->nodeB = tokens.at(2);
-            temp->group = G2;
+            temp->group = Group::G2;
             temp->value = value;
-            temp->controlling_variable = tokens.at(4) == "V" ? v : i;
+            temp->controlling_variable =
+                tokens.at(4) == "V" ? ControlVariable::v : ControlVariable::i;
 
             // Data Validation: Illegal controlling variable argument
             if (tokens.at(4) != "V" && tokens.at(4) != "I") {
@@ -157,7 +161,7 @@ int Parser::parse(const std::string &fileName)
                      << end;
                 error += 1;
 
-                temp->controlling_variable = none;
+                temp->controlling_variable = ControlVariable::none;
                 temp->controlling_element = NULL;
             } else {
                 temp->controlling_element = std::make_shared<CircuitElement>();
@@ -180,12 +184,12 @@ int Parser::parse(const std::string &fileName)
             std::shared_ptr<CircuitElement> temp =
                 std::make_shared<CircuitElement>();
             temp->name = tokens.at(0);
-            temp->type = V;
+            temp->type = ElementType::V;
             temp->nodeA = tokens.at(1);
             temp->nodeB = tokens.at(2);
-            temp->group = G2;
+            temp->group = Group::G2;
             temp->value = value;
-            temp->controlling_variable = none;
+            temp->controlling_variable = ControlVariable::none;
             temp->controlling_element = NULL;
             temp->processed = false;
 
@@ -204,22 +208,22 @@ int Parser::parse(const std::string &fileName)
             std::shared_ptr<CircuitElement> temp =
                 std::make_shared<CircuitElement>();
             temp->name = tokens.at(0);
-            temp->type = I;
+            temp->type = ElementType::I;
             temp->nodeA = tokens.at(1);
             temp->nodeB = tokens.at(2);
             if (tokens.size() >= 5 && tokens.at(4) == "G2") {
-                temp->group = G2;
+                temp->group = Group::G2;
                 nodes_group2.insert(temp->name);
             }
             // Data Validation: Correct group declaration
             else if (tokens.size() >= 5 && tokens.at(4) != "G1") {
                 cout << "Warning: Mention correct group at line number "
                      << (lineNumber - 1) << ": " + line << end;
-                temp->group = G1;
+                temp->group = Group::G1;
             } else
-                temp->group = G1;
+                temp->group = Group::G1;
             temp->value = value;
-            temp->controlling_variable = none;
+            temp->controlling_variable = ControlVariable::none;
             temp->controlling_element = NULL;
             temp->processed = false;
 
@@ -237,22 +241,22 @@ int Parser::parse(const std::string &fileName)
             std::shared_ptr<CircuitElement> temp =
                 std::make_shared<CircuitElement>();
             temp->name = tokens.at(0);
-            temp->type = R;
+            temp->type = ElementType::R;
             temp->nodeA = tokens.at(1);
             temp->nodeB = tokens.at(2);
             if (tokens.size() >= 5 && tokens.at(4) == "G2") {
-                temp->group = G2;
+                temp->group = Group::G2;
                 nodes_group2.insert(temp->name);
             }
             // Data Validation: Correct group declaration
             else if (tokens.size() >= 5 && tokens.at(4) != "G1") {
                 cout << "Warning: Mention correct group at line number "
                      << (lineNumber - 1) << ": " + line << endl;
-                temp->group = G1;
+                temp->group = Group::G1;
             } else
-                temp->group = G1;
+                temp->group = Group::G1;
             temp->value = value;
-            temp->controlling_variable = none;
+            temp->controlling_variable = ControlVariable::none;
             temp->controlling_element = NULL;
             temp->processed = false;
 
@@ -269,22 +273,22 @@ int Parser::parse(const std::string &fileName)
             std::shared_ptr<CircuitElement> temp =
                 std::make_shared<CircuitElement>();
             temp->name = tokens.at(0);
-            temp->type = C;
+            temp->type = ElementType::C;
             temp->nodeA = tokens.at(1);
             temp->nodeB = tokens.at(2);
             if (tokens.size() >= 5 && tokens.at(4) == "G2") {
-                temp->group = G2;
+                temp->group = Group::G2;
                 nodes_group2.insert(temp->name);
             }
             // Data Validation: Correct group declaration
             else if (tokens.size() >= 5 && tokens.at(4) != "G1") {
                 cout << "Warning: Mention correct group at line number "
                      << (lineNumber - 1) << ": " + line << endl;
-                temp->group = G1;
+                temp->group = Group::G1;
             } else
-                temp->group = G1;
+                temp->group = Group::G1;
             temp->value = value;
-            temp->controlling_variable = none;
+            temp->controlling_variable = ControlVariable::none;
             temp->controlling_element = NULL;
             temp->processed = false;
 
@@ -300,12 +304,12 @@ int Parser::parse(const std::string &fileName)
             std::shared_ptr<CircuitElement> temp =
                 std::make_shared<CircuitElement>();
             temp->name = tokens.at(0);
-            temp->type = L;
+            temp->type = ElementType::L;
             temp->nodeA = tokens.at(1);
             temp->nodeB = tokens.at(2);
-            temp->group = G2;
+            temp->group = Group::G2;
             temp->value = value;
-            temp->controlling_variable = none;
+            temp->controlling_variable = ControlVariable::none;
             temp->controlling_element = NULL;
             temp->processed = false;
 
@@ -328,7 +332,7 @@ int Parser::parse(const std::string &fileName)
 
     // Assign controlling_element variable using the pointers stored in the map
     for (std::shared_ptr<CircuitElement> circuitElement : circuitElements) {
-        if (circuitElement->controlling_variable != none) {
+        if (circuitElement->controlling_variable != ControlVariable::none) {
             // Checks whether the referenced element is present in the netlist
             if (elementMap.find(circuitElement->controlling_element->name) !=
                 elementMap.end()) {
@@ -336,8 +340,9 @@ int Parser::parse(const std::string &fileName)
                     elementMap[circuitElement->controlling_element->name];
 
                 // Make sures that the current controlling element is Group 2
-                if (circuitElement->controlling_variable == i &&
-                    circuitElement->controlling_element->group != G2) {
+                if (circuitElement->controlling_variable ==
+                        ControlVariable::i &&
+                    circuitElement->controlling_element->group != Group::G2) {
                     cout << "Warning: Referenced element " +
                                 circuitElement->controlling_element->name +
                                 " must be in group 2 as its current variable "
@@ -345,7 +350,7 @@ int Parser::parse(const std::string &fileName)
                                 "by " +
                                 circuitElement->name
                          << endl;
-                    circuitElement->controlling_element->group = G2;
+                    circuitElement->controlling_element->group = Group::G2;
                     nodes_group2.insert(
                         circuitElement->controlling_element->name);
                 }
@@ -386,8 +391,9 @@ int Parser::parse(const std::string &fileName)
 void Parser::printParser()
 {
     for (std::shared_ptr<CircuitElement> circuitElement : circuitElements)
-        if (circuitElement->type == V || circuitElement->type == I ||
-            circuitElement->type == R)
+        if (circuitElement->type == ElementType::V ||
+            circuitElement->type == ElementType::I ||
+            circuitElement->type == ElementType::R)
             cout << circuitElement->name + " " + circuitElement->nodeA + " " +
                         circuitElement->nodeB + " "
                  << circuitElement->value << " " << circuitElement->group

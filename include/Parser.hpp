@@ -58,7 +58,7 @@ class Parser
      *
      * @return		number of errors in the netlist
      */
-    int parse(const std::string &file);
+    int parse(const std::string& file);
 
     /**
      * @brief		Prints the vectors which contains the circuit elements

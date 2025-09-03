@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include <iostream>
 #include <memory>
 #include <string>
 
@@ -32,7 +33,7 @@
  *
  * Specifies the type of element that are supported by CircuitElement
  * */
-enum Component
+enum class ElementType
 {
     V,  /**<  Voltage source */
     I,  /**<  Current source */
@@ -44,26 +45,90 @@ enum Component
 
 };
 
+inline std::ostream& operator<<(std::ostream& os, ElementType et)
+{
+    switch (et) {
+        case ElementType::V:
+            os << "V";
+            break;
+        case ElementType::I:
+            os << "I";
+            break;
+        case ElementType::R:
+            os << "R";
+            break;
+        case ElementType::Ic:
+            os << "IC";
+            break;
+        case ElementType::Vc:
+            os << "VC";
+            break;
+        case ElementType::C:
+            os << "C";
+            break;
+        case ElementType::L:
+            os << "L";
+            break;
+        default:
+            os << "UnknownElementType";
+            break;
+    }
+    return os;
+}
 /** @enum Gruoup
  *
  * Specifies the group of element that are supported by CircuitElement
  * */
-enum Group
+enum class Group
 {
     G1 /**< Group 1: the currents for these elements need to be eliminated */,
     G2 /** Group 2: Elements not in G1. Other methods must be employed*/
 };
 
+inline std::ostream& operator<<(std::ostream& os, Group group)
+{
+    switch (group) {
+        case Group::G1:
+            os << "G1";
+            break;
+        case Group::G2:
+            os << "G2";
+            break;
+        default:
+            os << "UnknownGroup";
+            break;
+    }
+    return os;
+}
 /** @enum ControlVariable
  *
  * @brief Specifies the controlling variable for controlled sources
  * */
-enum ControlVariable
+enum class ControlVariable
 {
     none, /**<  No controlling variable */
     v,    /**<  Voltage */
     i     /**< Current */
 };
+
+inline std::ostream& operator<<(std::ostream& os, ControlVariable cv)
+{
+    switch (cv) {
+        case ControlVariable::none:
+            os << "none";
+            break;
+        case ControlVariable::v:
+            os << "v";
+            break;
+        case ControlVariable::i:
+            os << "i";
+            break;
+        default:
+            os << "UnknownControlVariable";
+            break;
+    }
+    return os;
+}
 
 /** @struct CircuitElement
  *
@@ -73,7 +138,7 @@ enum ControlVariable
 struct CircuitElement
 {
     std::string name;  /**< Name of the element*/
-    Component type;    /**< Specifies the type of the circuit element  */
+    ElementType type;  /**< Specifies the type of the circuit element  */
     std::string nodeA; /**< Starting node */
     std::string nodeB; /**< Ending node */
     Group group;       /**< Specifier if it belongs to  Group 1 or Group 2   */
