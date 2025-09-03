@@ -40,354 +40,108 @@ using std::cout, std::endl;
 
 int Parser::parse(const std::string& fileName)
 {
-    cout << "\nFile Name: " + fileName << endl;
-
     std::ifstream fileStream(fileName);
     if (!fileStream) {
-        cout << "Error: Netlist not avialable in the project directory" << endl;
+        std::cerr << "Error: Netlist not available in the project directory"
+                  << std::endl;
         return 1;
     }
+
     std::string line;
-    int lineNumber = 1, v_count = 0, i_count = 0, r_count = 0, c_count = 0,
-        vc_count = 0, ic_count = 0, error = 0, l_count = 0;
+    int lineNumber = 1;
+    int errorCount = 0;
 
-    // Stores pointer of all independent sources and resistors
-    // for assigning to controlling_element variable later
-    std::map<std::string, std::shared_ptr<CircuitElement>> elementMap;
+    // Clear previous data
+    circuitElements.clear();
+    nodes_group2.clear();
+    elementMap.clear();
 
-    while (getline(fileStream, line)) {
+    while (std::getline(fileStream, line)) {
         lineNumber++;
 
+        // Convert line to uppercase for uniformity
         std::transform(line.begin(), line.end(), line.begin(), ::toupper);
 
+        // Tokenize line
         std::stringstream ss(line);
         std::vector<std::string> tokens;
         std::string buf;
-
         while (ss >> buf) tokens.push_back(buf);
 
-        // Skips empty lines and comments
-        if (tokens.size() == 0 || tokens.at(0).find("%") == 0) continue;
+        // Skip empty lines and comments
+        if (tokens.empty() || tokens[0].find("%") == 0) continue;
 
-        // Both nodes can't be same
-        if (tokens.at(1) == tokens.at(2)) {
-            cout << "Warning: Two nodes of a element can't be same. Line "
-                    "number: "
-                 << (lineNumber - 1) << ": " + line << endl;
-            continue;
-        }
-
-        // Checks whether the value is actual double and not zero
-        char* end = 0;
-        double value = strtod(tokens.at(3).c_str(), &end);
-        if (end == tokens.at(3).c_str() || *end != '\0' || value == HUGE_VAL ||
-            value == 0) {
-            cout << "Error: Illegal argument for value at line number "
-                 << (lineNumber - 1) << ": " + line << end;
-            error += 1;
-            value = 1;
-        }
-
-        // Dependent Current Source (contains two data validation condidtions)
-        if ((tokens.at(0).find("IC") == 0) && (tokens.size() >= 6)) {
-            std::shared_ptr<CircuitElement> temp =
-                std::make_shared<CircuitElement>();
-            temp->name = tokens.at(0);
-            temp->type = ElementType::Ic;
-            temp->nodeA = tokens.at(1);
-            temp->nodeB = tokens.at(2);
-            temp->group = Group::G1;
-            temp->value = value;
-            temp->controlling_variable =
-                (tokens.at(4) == "V") ? ControlVariable::v : ControlVariable::i;
-
-            // Data Validation: Illegal controlling variable argument
-            if (tokens.at(4) != "V" && tokens.at(4) != "I") {
-                cout << "Error: Illegal controlling variable argument at line "
-                        "number "
-                     << (lineNumber - 1) << ": " + line << end;
-                error += 1;
-            }
-
-            // Data Validation: Cascading of controlled sources is not allowed
-            if (tokens.at(5).find("IC") == 0 || tokens.at(5).find("VC") == 0) {
-                cout << "Error: Controlled source " + tokens.at(0) +
-                            " cannot be cascaded at line number "
-                     << (lineNumber - 1) << ": " + line << end;
-                error += 1;
-
-                temp->controlling_variable = ControlVariable::none;
-                temp->controlling_element = NULL;
-            } else {
-                temp->controlling_element = std::make_shared<CircuitElement>();
-                temp->controlling_element->name = tokens.at(5);
-            }
-
-            temp->processed = false;
-
-            nodes_group2.insert(temp->nodeA);
-            nodes_group2.insert(temp->nodeB);
-
-            circuitElements.push_back(temp);
-
-            ic_count++;
-        }
-
-        // Dependent Voltage Source (contains tow data validation condidtions)
-        else if ((tokens.at(0).find("VC") == 0) && (tokens.size() >= 6)) {
-            std::shared_ptr<CircuitElement> temp =
-                std::make_shared<CircuitElement>();
-            temp->name = tokens.at(0);
-            temp->type = ElementType::Vc;
-            temp->nodeA = tokens.at(1);
-            temp->nodeB = tokens.at(2);
-            temp->group = Group::G2;
-            temp->value = value;
-            temp->controlling_variable =
-                tokens.at(4) == "V" ? ControlVariable::v : ControlVariable::i;
-
-            // Data Validation: Illegal controlling variable argument
-            if (tokens.at(4) != "V" && tokens.at(4) != "I") {
-                cout << "Error: Illegal controlling variable argument at line "
-                        "number "
-                     << (lineNumber - 1) << ": " + line << end;
-                error += 1;
-            }
-
-            // Data Validation: Cascading of controlled sources is not allowed
-            if (tokens.at(5).find("IC") == 0 || tokens.at(5).find("VC") == 0) {
-                cout << "Error: Controlled source " + tokens.at(0) +
-                            " cannot be cascaded"
-                     << end;
-                error += 1;
-
-                temp->controlling_variable = ControlVariable::none;
-                temp->controlling_element = NULL;
-            } else {
-                temp->controlling_element = std::make_shared<CircuitElement>();
-                temp->controlling_element->name = tokens.at(5);
-            }
-
-            temp->processed = false;
-
-            nodes_group2.insert(temp->name);
-            nodes_group2.insert(temp->nodeA);
-            nodes_group2.insert(temp->nodeB);
-
-            circuitElements.push_back(temp);
-
-            vc_count++;
-        }
-
-        // Independent Voltage Source
-        else if ((tokens.at(0).find("V") == 0) && (tokens.size() >= 4)) {
-            std::shared_ptr<CircuitElement> temp =
-                std::make_shared<CircuitElement>();
-            temp->name = tokens.at(0);
-            temp->type = ElementType::V;
-            temp->nodeA = tokens.at(1);
-            temp->nodeB = tokens.at(2);
-            temp->group = Group::G2;
-            temp->value = value;
-            temp->controlling_variable = ControlVariable::none;
-            temp->controlling_element = NULL;
-            temp->processed = false;
-
-            circuitElements.push_back(temp);
-            elementMap[temp->name] = temp;
-
-            nodes_group2.insert(temp->name);
-            nodes_group2.insert(temp->nodeA);
-            nodes_group2.insert(temp->nodeB);
-
-            v_count++;
-        }
-
-        // Independent Current Source (contains one data validation condition)
-        else if ((tokens.at(0).find("I") == 0) && (tokens.size() >= 4)) {
-            std::shared_ptr<CircuitElement> temp =
-                std::make_shared<CircuitElement>();
-            temp->name = tokens.at(0);
-            temp->type = ElementType::I;
-            temp->nodeA = tokens.at(1);
-            temp->nodeB = tokens.at(2);
-            if (tokens.size() >= 5 && tokens.at(4) == "G2") {
-                temp->group = Group::G2;
-                nodes_group2.insert(temp->name);
-            }
-            // Data Validation: Correct group declaration
-            else if (tokens.size() >= 5 && tokens.at(4) != "G1") {
-                cout << "Warning: Mention correct group at line number "
-                     << (lineNumber - 1) << ": " + line << end;
-                temp->group = Group::G1;
-            } else
-                temp->group = Group::G1;
-            temp->value = value;
-            temp->controlling_variable = ControlVariable::none;
-            temp->controlling_element = NULL;
-            temp->processed = false;
-
-            circuitElements.push_back(temp);
-            elementMap[temp->name] = temp;
-
-            nodes_group2.insert(temp->nodeA);
-            nodes_group2.insert(temp->nodeB);
-
-            i_count++;
-        }
-
-        // Resistor (contains one data validation condition)
-        else if ((tokens.at(0).find("R") == 0) && (tokens.size() >= 4)) {
-            std::shared_ptr<CircuitElement> temp =
-                std::make_shared<CircuitElement>();
-            temp->name = tokens.at(0);
-            temp->type = ElementType::R;
-            temp->nodeA = tokens.at(1);
-            temp->nodeB = tokens.at(2);
-            if (tokens.size() >= 5 && tokens.at(4) == "G2") {
-                temp->group = Group::G2;
-                nodes_group2.insert(temp->name);
-            }
-            // Data Validation: Correct group declaration
-            else if (tokens.size() >= 5 && tokens.at(4) != "G1") {
-                cout << "Warning: Mention correct group at line number "
-                     << (lineNumber - 1) << ": " + line << endl;
-                temp->group = Group::G1;
-            } else
-                temp->group = Group::G1;
-            temp->value = value;
-            temp->controlling_variable = ControlVariable::none;
-            temp->controlling_element = NULL;
-            temp->processed = false;
-
-            nodes_group2.insert(temp->nodeA);
-            nodes_group2.insert(temp->nodeB);
-
-            circuitElements.push_back(temp);
-            elementMap[temp->name] = temp;
-
-            r_count++;
-        }
-        // Capacitor (Contains one data validation condition
-        else if ((tokens.at(0).find("C") == 0) && (tokens.size() >= 4)) {
-            std::shared_ptr<CircuitElement> temp =
-                std::make_shared<CircuitElement>();
-            temp->name = tokens.at(0);
-            temp->type = ElementType::C;
-            temp->nodeA = tokens.at(1);
-            temp->nodeB = tokens.at(2);
-            if (tokens.size() >= 5 && tokens.at(4) == "G2") {
-                temp->group = Group::G2;
-                nodes_group2.insert(temp->name);
-            }
-            // Data Validation: Correct group declaration
-            else if (tokens.size() >= 5 && tokens.at(4) != "G1") {
-                cout << "Warning: Mention correct group at line number "
-                     << (lineNumber - 1) << ": " + line << endl;
-                temp->group = Group::G1;
-            } else
-                temp->group = Group::G1;
-            temp->value = value;
-            temp->controlling_variable = ControlVariable::none;
-            temp->controlling_element = NULL;
-            temp->processed = false;
-
-            nodes_group2.insert(temp->nodeA);
-            nodes_group2.insert(temp->nodeB);
-
-            circuitElements.push_back(temp);
-            elementMap[temp->name] = temp;
-
-            c_count++;
-        }  // Inductors (always  group 2)
-        else if ((tokens.at(0).find("L") == 0) && (tokens.size() >= 4)) {
-            std::shared_ptr<CircuitElement> temp =
-                std::make_shared<CircuitElement>();
-            temp->name = tokens.at(0);
-            temp->type = ElementType::L;
-            temp->nodeA = tokens.at(1);
-            temp->nodeB = tokens.at(2);
-            temp->group = Group::G2;
-            temp->value = value;
-            temp->controlling_variable = ControlVariable::none;
-            temp->controlling_element = NULL;
-            temp->processed = false;
-
-            circuitElements.push_back(temp);
-            elementMap[temp->name] = temp;
-
-            nodes_group2.insert(temp->name);
-            nodes_group2.insert(temp->nodeA);
-            nodes_group2.insert(temp->nodeB);
-
-            l_count++;
-        }
-        // Unknown Element
-        else {
-            cout << "Error: Unknown element at line number " << (lineNumber - 1)
-                 << ": " + line << endl;
-            error += 1;
+        // Dispatch to element-specific parse functions
+        if (tokens[0].find("R") == 0) {
+            ++elementCounts.resistorCount;
+            parseResistor(tokens, lineNumber);
+        } else if (tokens[0].find("V") == 0 && tokens[0].find("VC") != 0) {
+            ++elementCounts.voltageSourceCount;
+            parseVoltageSource(tokens, lineNumber);
+        } else if (tokens[0].find("I") == 0 && tokens[0].find("IC") != 0) {
+            ++elementCounts.currentSourceCount;
+            parseCurrentSource(tokens, lineNumber);
+        } else if (tokens[0].find("C") == 0) {
+            ++elementCounts.capacitorCount;
+            parseCapacitor(tokens, lineNumber);
+        } else if (tokens[0].find("L") == 0) {
+            ++elementCounts.inductorCount;
+            parseInductor(tokens, lineNumber);
+        } else if (tokens[0].find("VC") == 0) {
+            ++elementCounts.depVoltageSourceCount;
+            parseDependentVoltageSource(tokens, lineNumber);
+        } else if (tokens[0].find("IC") == 0) {
+            ++elementCounts.depCurrentSourceCount;
+            parseDependentCurrentSource(tokens, lineNumber);
+        } else {
+            std::cerr << "Error: Unknown element at line " << lineNumber << ": "
+                      << line << std::endl;
+            errorCount++;
         }
     }
 
-    // Assign controlling_element variable using the pointers stored in the map
-    for (std::shared_ptr<CircuitElement> circuitElement : circuitElements) {
-        if (circuitElement->controlling_variable != ControlVariable::none) {
-            // Checks whether the referenced element is present in the netlist
-            if (elementMap.find(circuitElement->controlling_element->name) !=
-                elementMap.end()) {
-                circuitElement->controlling_element =
-                    elementMap[circuitElement->controlling_element->name];
-
-                // Make sures that the current controlling element is Group 2
-                if (circuitElement->controlling_variable ==
-                        ControlVariable::i &&
-                    circuitElement->controlling_element->group != Group::G2) {
-                    cout << "Warning: Referenced element " +
-                                circuitElement->controlling_element->name +
-                                " must be in group 2 as its current variable "
-                                "is required "
-                                "by " +
-                                circuitElement->name
-                         << endl;
-                    circuitElement->controlling_element->group = Group::G2;
-                    nodes_group2.insert(
-                        circuitElement->controlling_element->name);
+    // Resolve controlling_element pointers for dependent sources
+    for (auto& elem : circuitElements) {
+        if (elem->controlling_variable != ControlVariable::none &&
+            elem->controlling_element) {
+            auto it = elementMap.find(elem->controlling_element->name);
+            if (it != elementMap.end()) {
+                elem->controlling_element = it->second;
+                // If controlling variable is current, referenced element must
+                // be group 2
+                if (elem->controlling_variable == ControlVariable::i &&
+                    elem->controlling_element->group != Group::G2) {
+                    std::cerr << "Warning: Referenced element "
+                              << elem->controlling_element->name
+                              << " must be in group 2 as its current variable "
+                                 "is required by "
+                              << elem->name << std::endl;
+                    elem->controlling_element->group = Group::G2;
+                    nodes_group2.insert(elem->controlling_element->name);
                 }
             } else {
-                cout << "Error: Referencing element " +
-                            circuitElement->controlling_element->name +
-                            ", referenced by " + circuitElement->name +
-                            " is not present in the netlist"
-                     << endl;
-                error += 1;
+                std::cerr << "Error: Referenced element "
+                          << elem->controlling_element->name
+                          << " (referenced by " << elem->name
+                          << ") is not present in the netlist" << std::endl;
+                errorCount++;
             }
         }
     }
 
-    // Checks if the circuit contains ground (reference node)
+    // Check for ground node
     if (nodes_group2.find("0") == nodes_group2.end()) {
-        cout << "Error: Circuit must contain ground (0)" << endl;
-        error += 1;
+        std::cerr << "Error: Circuit must contain ground (0)" << std::endl;
+        errorCount++;
     }
 
-    if (error == 0) {
-        cout << "\nTotal Independent Voltage Source(s) in the Circuit: "
-             << v_count << endl;
-        cout << "Total Independent Current Source(s) in the Circuit: "
-             << i_count << endl;
-        cout << "Total Resistor(s) in the Circuit: " << r_count << endl;
-        cout << "Total Dependent Voltage Source(s) in the Circuit: " << vc_count
-             << endl;
-        cout << "Total Dependent Current Source(s) in the Circuit: " << ic_count
-             << endl;
-        cout << "Total Capacitor(s) in the Circuit: " << c_count << endl;
-        cout << "Total Inductors(s) in the Circuit: " << l_count << endl;
-    }
+    // Print summary (optional)
+    std::cout << "\nTotal elements in the circuit: " << circuitElements.size()
+              << std::endl;
 
-    return error;
+    printElementCounts();
+    return errorCount;
 }
-
 void Parser::printParser()
 {
     for (std::shared_ptr<CircuitElement> circuitElement : circuitElements)
@@ -407,4 +161,443 @@ void Parser::printParser()
                         circuitElement->controlling_element->nodeA + " " +
                         circuitElement->controlling_element->nodeB
                  << endl;
+}
+bool Parser::validateTokens(const std::vector<std::string>& tokens,
+                            int expectedSize, int lineNumber)
+{
+    if (tokens.size() != expectedSize) {
+        std::cerr << "Line " << lineNumber << ": Expected " << expectedSize
+                  << " tokens, got " << tokens.size() << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool Parser::validateNodes(const std::string& nodeA, const std::string& nodeB,
+                           int lineNumber)
+{
+    if (nodeA == nodeB) {
+        std::cerr << "Line " << lineNumber
+                  << ": NodeA and NodeB cannot be the same (" << nodeA << ")"
+                  << std::endl;
+        return false;
+    }
+    return true;
+}
+
+double Parser::parseValue(const std::string& valueStr, int lineNumber,
+                          bool& valid)
+{
+    try {
+        double value = std::stod(valueStr);
+        valid = true;
+        return value;
+    } catch (const std::exception&) {
+        std::cerr << "Line " << lineNumber << ": Invalid value '" << valueStr
+                  << "'" << std::endl;
+        valid = false;
+        return 0.0;
+    }
+}
+
+void Parser::parseResistor(const std::vector<std::string>& tokens,
+                           int lineNumber)
+{
+    // Validate token count
+    if (!validateTokens(tokens, 4, lineNumber) &&
+        !validateTokens(tokens, 5, lineNumber)) {
+        std::cerr << "Error: Invalid resistor definition at line " << lineNumber
+                  << std::endl;
+        return;
+    }
+
+    // Validate nodes
+    if (!validateNodes(tokens[1], tokens[2], lineNumber)) {
+        std::cerr << "Error: Resistor nodes cannot be the same at line "
+                  << lineNumber << std::endl;
+        return;
+    }
+
+    // Parse value
+    bool validValue = false;
+    double value = parseValue(tokens[3], lineNumber, validValue);
+    if (!validValue || value == 0) {
+        std::cerr << "Error: Illegal argument for resistor value at line "
+                  << lineNumber << std::endl;
+        value = 1;  // Default to 1 ohm if invalid
+    }
+
+    // Create resistor element
+    auto temp = std::make_shared<CircuitElement>();
+    temp->name = tokens[0];
+    temp->type = ElementType::R;
+    temp->nodeA = tokens[1];
+    temp->nodeB = tokens[2];
+    temp->group =
+        (tokens.size() >= 5 && tokens[4] == "G2") ? Group::G2 : Group::G1;
+    temp->value = value;
+    temp->controlling_variable = ControlVariable::none;
+    temp->controlling_element = nullptr;
+    temp->processed = false;
+
+    // Update nodes_group2 if group is G2
+    if (temp->group == Group::G2) {
+        nodes_group2.insert(temp->name);
+    }
+    nodes_group2.insert(temp->nodeA);
+    nodes_group2.insert(temp->nodeB);
+
+    // Add to circuitElements and elementMap
+    circuitElements.push_back(temp);
+    elementMap[temp->name] = temp;
+}
+
+void Parser::parseVoltageSource(const std::vector<std::string>& tokens,
+                                int lineNumber)
+{
+    // Validate token count
+    if (!validateTokens(tokens, 4, lineNumber)) {
+        std::cerr << "Error: Invalid voltage source definition at line "
+                  << lineNumber << std::endl;
+        return;
+    }
+
+    // Validate nodes
+    if (!validateNodes(tokens[1], tokens[2], lineNumber)) {
+        std::cerr << "Error: Voltage source nodes cannot be the same at line "
+                  << lineNumber << std::endl;
+        return;
+    }
+
+    // Parse value
+    bool validValue = false;
+    double value = parseValue(tokens[3], lineNumber, validValue);
+    if (!validValue || value == 0) {
+        std::cerr << "Error: Illegal argument for voltage source value at line "
+                  << lineNumber << std::endl;
+        value = 1;  // Default to 1V if invalid
+    }
+
+    // Create voltage source element
+    auto temp = std::make_shared<CircuitElement>();
+    temp->name = tokens[0];
+    temp->type = ElementType::V;
+    temp->nodeA = tokens[1];
+    temp->nodeB = tokens[2];
+    temp->group = Group::G2;
+    temp->value = value;
+    temp->controlling_variable = ControlVariable::none;
+    temp->controlling_element = nullptr;
+    temp->processed = false;
+
+    // Update nodes_group2
+    nodes_group2.insert(temp->name);
+    nodes_group2.insert(temp->nodeA);
+    nodes_group2.insert(temp->nodeB);
+
+    // Add to circuitElements and elementMap
+    circuitElements.push_back(temp);
+    elementMap[temp->name] = temp;
+}
+
+void Parser::parseCurrentSource(const std::vector<std::string>& tokens,
+                                int lineNumber)
+{
+    // Valid token counts: 4 or 5 (for optional group)
+    if (!validateTokens(tokens, 4, lineNumber) &&
+        !validateTokens(tokens, 5, lineNumber)) {
+        std::cerr << "Error: Invalid current source definition at line "
+                  << lineNumber << std::endl;
+        return;
+    }
+
+    if (!validateNodes(tokens[1], tokens[2], lineNumber)) {
+        std::cerr << "Error: Current source nodes cannot be the same at line "
+                  << lineNumber << std::endl;
+        return;
+    }
+
+    bool validValue = false;
+    double value = parseValue(tokens[3], lineNumber, validValue);
+    if (!validValue || value == 0) {
+        std::cerr << "Error: Illegal argument for current source value at line "
+                  << lineNumber << std::endl;
+        value = 1;
+    }
+
+    auto temp = std::make_shared<CircuitElement>();
+    temp->name = tokens[0];
+    temp->type = ElementType::I;
+    temp->nodeA = tokens[1];
+    temp->nodeB = tokens[2];
+
+    // Group logic
+    if (tokens.size() >= 5 && tokens[4] == "G2") {
+        temp->group = Group::G2;
+        nodes_group2.insert(temp->name);
+    } else if (tokens.size() >= 5 && tokens[4] != "G1") {
+        std::cerr << "Warning: Mention correct group at line " << lineNumber
+                  << std::endl;
+        temp->group = Group::G1;
+    } else {
+        temp->group = Group::G1;
+    }
+
+    temp->value = value;
+    temp->controlling_variable = ControlVariable::none;
+    temp->controlling_element = nullptr;
+    temp->processed = false;
+
+    nodes_group2.insert(temp->nodeA);
+    nodes_group2.insert(temp->nodeB);
+
+    circuitElements.push_back(temp);
+    elementMap[temp->name] = temp;
+}
+void Parser::parseCapacitor(const std::vector<std::string>& tokens,
+                            int lineNumber)
+{
+    // Valid token counts: 4 or 5 (for optional group)
+    if (!validateTokens(tokens, 4, lineNumber) &&
+        !validateTokens(tokens, 5, lineNumber)) {
+        std::cerr << "Error: Invalid capacitor definition at line "
+                  << lineNumber << std::endl;
+        return;
+    }
+
+    if (!validateNodes(tokens[1], tokens[2], lineNumber)) {
+        std::cerr << "Error: Capacitor nodes cannot be the same at line "
+                  << lineNumber << std::endl;
+        return;
+    }
+
+    bool validValue = false;
+    double value = parseValue(tokens[3], lineNumber, validValue);
+    if (!validValue || value == 0) {
+        std::cerr << "Error: Illegal argument for capacitor value at line "
+                  << lineNumber << std::endl;
+        value = 1;
+    }
+
+    auto temp = std::make_shared<CircuitElement>();
+    temp->name = tokens[0];
+    temp->type = ElementType::C;
+    temp->nodeA = tokens[1];
+    temp->nodeB = tokens[2];
+
+    // Group logic
+    if (tokens.size() >= 5 && tokens[4] == "G2") {
+        temp->group = Group::G2;
+        nodes_group2.insert(temp->name);
+    } else if (tokens.size() >= 5 && tokens[4] != "G1") {
+        std::cerr << "Warning: Mention correct group at line " << lineNumber
+                  << std::endl;
+        temp->group = Group::G1;
+    } else {
+        temp->group = Group::G1;
+    }
+
+    temp->value = value;
+    temp->controlling_variable = ControlVariable::none;
+    temp->controlling_element = nullptr;
+    temp->processed = false;
+
+    nodes_group2.insert(temp->nodeA);
+    nodes_group2.insert(temp->nodeB);
+
+    circuitElements.push_back(temp);
+    elementMap[temp->name] = temp;
+}
+void Parser::parseInductor(const std::vector<std::string>& tokens,
+                           int lineNumber)
+{
+    // Inductors are always group 2
+    if (!validateTokens(tokens, 4, lineNumber)) {
+        std::cerr << "Error: Invalid inductor definition at line " << lineNumber
+                  << std::endl;
+        return;
+    }
+
+    if (!validateNodes(tokens[1], tokens[2], lineNumber)) {
+        std::cerr << "Error: Inductor nodes cannot be the same at line "
+                  << lineNumber << std::endl;
+        return;
+    }
+
+    bool validValue = false;
+    double value = parseValue(tokens[3], lineNumber, validValue);
+    if (!validValue || value == 0) {
+        std::cerr << "Error: Illegal argument for inductor value at line "
+                  << lineNumber << std::endl;
+        value = 1;
+    }
+
+    auto temp = std::make_shared<CircuitElement>();
+    temp->name = tokens[0];
+    temp->type = ElementType::L;
+    temp->nodeA = tokens[1];
+    temp->nodeB = tokens[2];
+    temp->group = Group::G2;
+    temp->value = value;
+    temp->controlling_variable = ControlVariable::none;
+    temp->controlling_element = nullptr;
+    temp->processed = false;
+
+    nodes_group2.insert(temp->name);
+    nodes_group2.insert(temp->nodeA);
+    nodes_group2.insert(temp->nodeB);
+
+    circuitElements.push_back(temp);
+    elementMap[temp->name] = temp;
+}
+
+void Parser::parseDependentVoltageSource(const std::vector<std::string>& tokens,
+                                         int lineNumber)
+{
+    // Must have at least 6 tokens: VC name nodeA nodeB value
+    // controlling_variable controlling_element
+    if (!validateTokens(tokens, 6, lineNumber)) {
+        std::cerr
+            << "Error: Invalid dependent voltage source definition at line "
+            << lineNumber << std::endl;
+        return;
+    }
+
+    if (!validateNodes(tokens[1], tokens[2], lineNumber)) {
+        std::cerr << "Error: Dependent voltage source nodes cannot be the same "
+                     "at line "
+                  << lineNumber << std::endl;
+        return;
+    }
+
+    bool validValue = false;
+    double value = parseValue(tokens[3], lineNumber, validValue);
+    if (!validValue || value == 0) {
+        std::cerr << "Error: Illegal argument for dependent voltage source "
+                     "value at line "
+                  << lineNumber << std::endl;
+        value = 1;
+    }
+
+    auto temp = std::make_shared<CircuitElement>();
+    temp->name = tokens[0];
+    temp->type = ElementType::Vc;
+    temp->nodeA = tokens[1];
+    temp->nodeB = tokens[2];
+    temp->group = Group::G2;
+    temp->value = value;
+
+    // Controlling variable: must be "V" or "I"
+    if (tokens[4] == "V") {
+        temp->controlling_variable = ControlVariable::v;
+    } else if (tokens[4] == "I") {
+        temp->controlling_variable = ControlVariable::i;
+    } else {
+        std::cerr << "Error: Illegal controlling variable argument at line "
+                  << lineNumber << std::endl;
+        temp->controlling_variable = ControlVariable::none;
+    }
+
+    // Cascading check: controlling element cannot be VC or IC
+    if (tokens[5].find("IC") == 0 || tokens[5].find("VC") == 0) {
+        std::cerr << "Error: Controlled source " << tokens[0]
+                  << " cannot be cascaded at line " << lineNumber << std::endl;
+        temp->controlling_variable = ControlVariable::none;
+        temp->controlling_element = nullptr;
+    } else {
+        temp->controlling_element = std::make_shared<CircuitElement>();
+        temp->controlling_element->name = tokens[5];
+    }
+
+    temp->processed = false;
+
+    nodes_group2.insert(temp->name);
+    nodes_group2.insert(temp->nodeA);
+    nodes_group2.insert(temp->nodeB);
+
+    circuitElements.push_back(temp);
+}
+
+void Parser::parseDependentCurrentSource(const std::vector<std::string>& tokens,
+                                         int lineNumber)
+{
+    // Must have at least 6 tokens: IC name nodeA nodeB value
+    // controlling_variable controlling_element
+    if (!validateTokens(tokens, 6, lineNumber)) {
+        std::cerr
+            << "Error: Invalid dependent current source definition at line "
+            << lineNumber << std::endl;
+        return;
+    }
+
+    if (!validateNodes(tokens[1], tokens[2], lineNumber)) {
+        std::cerr << "Error: Dependent current source nodes cannot be the same "
+                     "at line "
+                  << lineNumber << std::endl;
+        return;
+    }
+
+    bool validValue = false;
+    double value = parseValue(tokens[3], lineNumber, validValue);
+    if (!validValue || value == 0) {
+        std::cerr << "Error: Illegal argument for dependent current source "
+                     "value at line "
+                  << lineNumber << std::endl;
+        value = 1;
+    }
+
+    auto temp = std::make_shared<CircuitElement>();
+    temp->name = tokens[0];
+    temp->type = ElementType::Ic;
+    temp->nodeA = tokens[1];
+    temp->nodeB = tokens[2];
+    temp->group = Group::G1;
+    temp->value = value;
+
+    // Controlling variable: must be "V" or "I"
+    if (tokens[4] == "V") {
+        temp->controlling_variable = ControlVariable::v;
+    } else if (tokens[4] == "I") {
+        temp->controlling_variable = ControlVariable::i;
+    } else {
+        std::cerr << "Error: Illegal controlling variable argument at line "
+                  << lineNumber << std::endl;
+        temp->controlling_variable = ControlVariable::none;
+    }
+
+    // Cascading check: controlling element cannot be VC or IC
+    if (tokens[5].find("IC") == 0 || tokens[5].find("VC") == 0) {
+        std::cerr << "Error: Controlled source " << tokens[0]
+                  << " cannot be cascaded at line " << lineNumber << std::endl;
+        temp->controlling_variable = ControlVariable::none;
+        temp->controlling_element = nullptr;
+    } else {
+        temp->controlling_element = std::make_shared<CircuitElement>();
+        temp->controlling_element->name = tokens[5];
+    }
+
+    temp->processed = false;
+
+    nodes_group2.insert(temp->nodeA);
+    nodes_group2.insert(temp->nodeB);
+
+    circuitElements.push_back(temp);
+}
+
+void Parser::printElementCounts() const
+{
+    std::cout << "Total Resistors: " << elementCounts.resistorCount
+              << std::endl;
+    std::cout << "Total Voltage Sources: " << elementCounts.voltageSourceCount
+              << std::endl;
+    std::cout << "Total Current Sources: " << elementCounts.currentSourceCount
+              << std::endl;
+    std::cout << "Total Capacitors: " << elementCounts.capacitorCount
+              << std::endl;
+    std::cout << "Total Inductors: " << elementCounts.inductorCount
+              << std::endl;
+    std::cout << "Total Dependent Voltage Sources: "
+              << elementCounts.depVoltageSourceCount << std::endl;
+    std::cout << "Total Dependent Current Sources: "
+              << elementCounts.depCurrentSourceCount << std::endl;
 }

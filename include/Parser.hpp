@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -42,6 +43,17 @@
  * set for further processing.
  *
  * */
+
+struct ElementCounts
+{
+    int resistorCount = 0;
+    int voltageSourceCount = 0;
+    int currentSourceCount = 0;
+    int capacitorCount = 0;
+    int inductorCount = 0;
+    int depVoltageSourceCount = 0;
+    int depCurrentSourceCount = 0;
+};
 
 class Parser
 {
@@ -65,4 +77,30 @@ class Parser
      *
      */
     void printParser();
+
+   private:
+    // element map
+    std::map<std::string, std::shared_ptr<CircuitElement>> elementMap;
+    ElementCounts elementCounts;
+
+    // One function per element type
+    void parseResistor(const std::vector<std::string>& tokens, int lineNumber);
+    void parseVoltageSource(const std::vector<std::string>& tokens,
+                            int lineNumber);
+    void parseCurrentSource(const std::vector<std::string>& tokens,
+                            int lineNumber);
+    void parseCapacitor(const std::vector<std::string>& tokens, int lineNumber);
+    void parseInductor(const std::vector<std::string>& tokens, int lineNumber);
+    void parseDependentVoltageSource(const std::vector<std::string>& tokens,
+                                     int lineNumber);
+    void parseDependentCurrentSource(const std::vector<std::string>& tokens,
+                                     int lineNumber);
+
+    // utility functions
+    bool validateTokens(const std::vector<std::string>& tokens, int lineNumber,
+                        int expectedSize);
+    double parseValue(const std::string& valueStr, int lineNumber, bool& valid);
+    bool validateNodes(const std::string& nodeA, const std::string& nodeB,
+                       int lineNumber);
+    void printElementCounts() const;
 };
