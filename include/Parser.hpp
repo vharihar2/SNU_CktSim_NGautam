@@ -82,6 +82,7 @@ class Parser
     // element map
     std::map<std::string, std::shared_ptr<CircuitElement>> elementMap;
     ElementCounts elementCounts;
+    constexpr static double STABILITY_RESISTOR_VALUE = 1e12;
 
     // One function per element type
     void parseResistor(const std::vector<std::string>& tokens, int lineNumber);
@@ -103,4 +104,5 @@ class Parser
     bool validateNodes(const std::string& nodeA, const std::string& nodeB,
                        int lineNumber);
     void printElementCounts() const;
+    void addStabilityResistors();
 };

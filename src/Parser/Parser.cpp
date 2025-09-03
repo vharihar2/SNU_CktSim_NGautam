@@ -140,6 +140,7 @@ int Parser::parse(const std::string& fileName)
               << std::endl;
 
     printElementCounts();
+    addStabilityResistors();
     return errorCount;
 }
 void Parser::printParser()
@@ -600,4 +601,28 @@ void Parser::printElementCounts() const
               << elementCounts.depVoltageSourceCount << std::endl;
     std::cout << "Total Dependent Current Sources: "
               << elementCounts.depCurrentSourceCount << std::endl;
+}
+
+void Parser::addStabilityResistors()
+{
+    int stabilityResistorIndex = 1;
+    for (const auto& node : nodes_group2) {
+        if (node == "0") continue;  // Skip ground
+        auto temp = std::make_shared<CircuitElement>();
+        temp->name =
+            "RSTAB_" + node;  // Unique name, e.g., RSTAB_1, RSTAB_2, etc.
+        temp->type = ElementType::R;
+        temp->nodeA = node;
+        temp->nodeB = "0";
+        temp->group = Group::G1;
+        temp->value = STABILITY_RESISTOR_VALUE;
+        temp->controlling_variable = ControlVariable::none;
+        temp->controlling_element = nullptr;
+        temp->processed = false;
+
+        circuitElements.push_back(temp);
+        elementMap[temp->name] = temp;
+        // Optionally: nodes_group2.insert(node); // Already present
+        stabilityResistorIndex++;
+    }
 }
