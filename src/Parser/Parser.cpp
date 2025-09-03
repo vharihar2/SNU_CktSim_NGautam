@@ -234,8 +234,7 @@ void Parser::parseResistor(const std::vector<std::string>& tokens,
     temp->type = ElementType::R;
     temp->nodeA = tokens[1];
     temp->nodeB = tokens[2];
-    temp->group =
-        (tokens.size() >= 5 && tokens[4] == "G2") ? Group::G2 : Group::G1;
+    temp->group = Group::G2;
     temp->value = value;
     temp->controlling_variable = ControlVariable::none;
     temp->controlling_element = nullptr;
@@ -331,19 +330,7 @@ void Parser::parseCurrentSource(const std::vector<std::string>& tokens,
     temp->type = ElementType::I;
     temp->nodeA = tokens[1];
     temp->nodeB = tokens[2];
-
-    // Group logic
-    if (tokens.size() >= 5 && tokens[4] == "G2") {
-        temp->group = Group::G2;
-        nodes_group2.insert(temp->name);
-    } else if (tokens.size() >= 5 && tokens[4] != "G1") {
-        std::cerr << "Warning: Mention correct group at line " << lineNumber
-                  << std::endl;
-        temp->group = Group::G1;
-    } else {
-        temp->group = Group::G1;
-    }
-
+    temp->group = Group::G2;
     temp->value = value;
     temp->controlling_variable = ControlVariable::none;
     temp->controlling_element = nullptr;
@@ -385,19 +372,7 @@ void Parser::parseCapacitor(const std::vector<std::string>& tokens,
     temp->type = ElementType::C;
     temp->nodeA = tokens[1];
     temp->nodeB = tokens[2];
-
-    // Group logic
-    if (tokens.size() >= 5 && tokens[4] == "G2") {
-        temp->group = Group::G2;
-        nodes_group2.insert(temp->name);
-    } else if (tokens.size() >= 5 && tokens[4] != "G1") {
-        std::cerr << "Warning: Mention correct group at line " << lineNumber
-                  << std::endl;
-        temp->group = Group::G1;
-    } else {
-        temp->group = Group::G1;
-    }
-
+    temp->group = Group::G2;
     temp->value = value;
     temp->controlling_variable = ControlVariable::none;
     temp->controlling_element = nullptr;
@@ -552,7 +527,7 @@ void Parser::parseDependentCurrentSource(const std::vector<std::string>& tokens,
     temp->type = ElementType::Ic;
     temp->nodeA = tokens[1];
     temp->nodeB = tokens[2];
-    temp->group = Group::G1;
+    temp->group = Group::G2;
     temp->value = value;
 
     // Controlling variable: must be "V" or "I"
