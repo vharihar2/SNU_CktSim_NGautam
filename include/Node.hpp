@@ -66,4 +66,41 @@ class Node
     void traverse(std::map<std::string, int> &indexMap,
                   std::vector<std::vector<double>> &mna,
                   std::vector<double> &rhs);
+
+    static void handleResistor(const std::shared_ptr<Edge> &edge,
+                               std::map<std::string, int> &indexMap,
+                               std::vector<std::vector<double>> &mna,
+                               std::vector<double> &rhs);
+
+    static void handleCapacitor(const std::shared_ptr<Edge> &edge,
+                                std::map<std::string, int> &indexMap,
+                                std::vector<std::vector<double>> &mna,
+                                std::vector<double> &rhs);
+
+    static void handleInductor(const std::shared_ptr<Edge> &edge,
+                               std::map<std::string, int> &indexMap,
+                               std::vector<std::vector<double>> &mna,
+                               std::vector<double> &rhs);
+
+    static void handleCurrentSource(const std::shared_ptr<Edge> &edge,
+                                    std::map<std::string, int> &indexMap,
+                                    std::vector<std::vector<double>> &mna,
+                                    std::vector<double> &rhs);
+
+    static void handleVoltageSource(const std::shared_ptr<Edge> &edge,
+                                    std::map<std::string, int> &indexMap,
+                                    std::vector<std::vector<double>> &mna,
+                                    std::vector<double> &rhs);
+
+    static void handleDepVoltageSource(const std::shared_ptr<Edge> &edge,
+                                       std::map<std::string, int> &indexMap,
+                                       std::vector<std::vector<double>> &mna,
+                                       std::vector<double> &rhs);
+
+    static void handleDepCurrentSource(const std::shared_ptr<Edge> &edge,
+                                       std::map<std::string, int> &indexMap,
+                                       std::vector<std::vector<double>> &mna,
+                                       std::vector<double> &rhs);
+
+    // Add more handler declarations as needed for other element types
 };
