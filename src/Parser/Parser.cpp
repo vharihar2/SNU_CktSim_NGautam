@@ -16,13 +16,14 @@
  * NADAR UNIVERSITY HAS NO OBLIGATION TO PROVIDE MAINTENANCE, SUPPORT, UPDATES,
  * ENHANCEMENTS, OR MODIFICATIONS.
  */
+
 /**
  * @file Parser.cpp
  *
  * @brief Contains the implementation of the Parser class
  */
 
-#include "../../include/Parser.hpp"
+#include "Parser.hpp"
 
 #include <algorithm>
 #include <cmath>

@@ -23,7 +23,7 @@
  * @brief Contains the  implemntation of the main functions
  */
 
-#include "../../include/Solver.hpp"
+#include "Solver.hpp"
 
 #include <iomanip>
 #include <iostream>

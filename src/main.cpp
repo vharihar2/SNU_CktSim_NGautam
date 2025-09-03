@@ -23,8 +23,8 @@
  * @brief Contains the  implemntation of the main functions
  */
 
-#include "../include/main.hpp"
+#include "main.hpp"
 
-#include "../include/Solver.hpp"
+#include "Solver.hpp"
 
 int main(int argc, char *argv[]) { return runSolver(argc, argv); }
