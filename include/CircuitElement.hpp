@@ -191,4 +191,7 @@ class CircuitElement
         Parser& parser, const std::vector<std::string>& tokens, int lineNumber);
     bool isProcessed() const { return processed; }
     void setProcessed(bool val) { processed = val; }
+    std::string getName() const { return name; }
+    std::string getNodeA() const { return nodeA; }
+    std::string getNodeB() const { return nodeB; }
 };
