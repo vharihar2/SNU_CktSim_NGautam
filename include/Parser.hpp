@@ -44,6 +44,8 @@
  *
  * */
 
+class CircuitElement;
+
 struct ElementCounts
 {
     int resistorCount = 0;

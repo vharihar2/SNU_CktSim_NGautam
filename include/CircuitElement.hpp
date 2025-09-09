@@ -28,6 +28,9 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
+
+#include "Parser.hpp"
 
 /** @enum Component
  *
@@ -135,19 +138,57 @@ inline std::ostream& operator<<(std::ostream& os, ControlVariable cv)
  * @brief Represents the properties of any element in the circuit
  * */
 
-struct CircuitElement
+// struct CircuitElement
+// {
+//     std::string name;  /**< Name of the element*/
+//     ElementType type;  /**< Specifies the type of the circuit element  */
+//     std::string nodeA; /**< Starting node */
+//     std::string nodeB; /**< Ending node */
+//     Group group;       /**< Specifier if it belongs to  Group 1 or Group 2 */
+//     double value; /**< Value of the element (or scale factor if it is
+//     controlled
+//                      source)*/
+//     ControlVariable controlling_variable; /**< Only for controlled sources,
+//                                      variable that the element depends on  */
+//     std::shared_ptr<CircuitElement>
+//         controlling_element; /**< Only for controlled sources, element whose
+//                                 value that the current element depends on  */
+//     bool processed;          /**< Flag value to know whether it is processed
+//     */
+// };
+
+class CircuitElement
 {
-    std::string name;  /**< Name of the element*/
-    ElementType type;  /**< Specifies the type of the circuit element  */
-    std::string nodeA; /**< Starting node */
-    std::string nodeB; /**< Ending node */
-    Group group;       /**< Specifier if it belongs to  Group 1 or Group 2   */
-    double value; /**< Value of the element (or scale factor if it is controlled
-                     source)*/
-    ControlVariable controlling_variable; /**< Only for controlled sources,
-                                     variable that the element depends on  */
-    std::shared_ptr<CircuitElement>
-        controlling_element; /**< Only for controlled sources, element whose
-                                value that the current element depends on  */
-    bool processed;          /**< Flag value to know whether it is processed */
+   protected:
+    std::string name;
+    std::string nodeA;
+    std::string nodeB;
+    Group group;
+    double value;
+
+    // needs to be removed after refactor
+    ElementType type;
+
+    // Dont know how i feel about this being common to all elements
+    ControlVariable controlling_variable;
+    std::shared_ptr<CircuitElement> controlling_element;
+    bool processed;
+
+   public:
+    CircuitElement(const std::string& name, std::string& nodeA,
+                   std::string& nodeB, double value)
+        : name(name), nodeA(nodeA), nodeB(nodeB), value(value)
+    {
+    }
+
+    virtual ~CircuitElement() = default;
+
+    virtual void stamp(std::vector<std::vector<double>>& mna,
+                       std::vector<double>& rhs,
+                       std::map<std::string, int>& indexMap) = 0;
+
+    static std::shared_ptr<CircuitElement> parse(
+        Parser& parser, const std::vector<std::string>& tokens, int lineNumber);
+    bool isProcessed() const { return processed; }
+    void setProcessed(bool val) { processed = val; }
 };
