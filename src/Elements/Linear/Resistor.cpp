@@ -1,8 +1,50 @@
 #include "Resistor.hpp"
 
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
+
+#include "CircuitElement.hpp"
+#include "Parser.hpp"
+
+std::shared_ptr<CircuitElement> Resistor::parse(
+    Parser& parser, const std::vector<std::string>& tokens, int lineNumber)
+{
+    // Validate token count
+    if (!parser.validateTokens(tokens, 4, lineNumber) &&
+        !parser.validateTokens(tokens, 5, lineNumber)) {
+        std::cerr << "Error: Invalid resistor definition at line " << lineNumber
+                  << std::endl;
+        return nullptr;
+    }
+
+    // Validate nodes
+    if (!parser.validateNodes(tokens[1], tokens[2], lineNumber)) {
+        std::cerr << "Error: Resistor nodes cannot be the same at line "
+                  << lineNumber << std::endl;
+        return nullptr;
+    }
+
+    // Parse value
+    bool validValue = false;
+    double value = parser.parseValue(tokens[3], lineNumber, validValue);
+    if (!validValue || value == 0) {
+        std::cerr << "Error: Illegal argument for resistor value at line "
+                  << lineNumber << std::endl;
+        return nullptr;
+    }
+
+    // Create resistor element
+    auto element =
+        std::make_shared<Resistor>(tokens[0], tokens[1], tokens[2], value);
+    element->type = ElementType::R;
+    element->group = Group::G2;
+    element->controlling_variable = ControlVariable::none;
+    element->controlling_element = nullptr;
+    element->processed = false;
+    return element;
+}
 
 void Resistor::stamp(std::vector<std::vector<double>>& mna,
                      std::vector<double>& rhs,

@@ -63,25 +63,25 @@ void makeGraph(std::map<std::string, std::shared_ptr<Node>> &nodeMap,
         // Creates/retrieves start node
         std::shared_ptr<Node> nodeStart;
         std::map<std::string, std::shared_ptr<Node>>::iterator startNodeIter =
-            nodeMap.find(circuitElement->nodeA);
+            nodeMap.find(circuitElement->getNodeA());
         if (startNodeIter != nodeMap.end())
             nodeStart = startNodeIter->second;
         else {
             nodeStart = std::make_shared<Node>();
-            nodeStart->name = circuitElement->nodeA;
-            nodeMap[circuitElement->nodeA] = nodeStart;
+            nodeStart->name = circuitElement->getNodeA();
+            nodeMap[circuitElement->getNodeA()] = nodeStart;
         }
 
         // Creates/retrieves end node
         std::shared_ptr<Node> nodeEnd;
         std::map<std::string, std::shared_ptr<Node>>::iterator endNodeIter =
-            nodeMap.find(circuitElement->nodeB);
+            nodeMap.find(circuitElement->getNodeB());
         if (endNodeIter != nodeMap.end())
             nodeEnd = endNodeIter->second;
         else {
             nodeEnd = std::make_shared<Node>();
-            nodeEnd->name = circuitElement->nodeB;
-            nodeMap[circuitElement->nodeB] = nodeEnd;
+            nodeEnd->name = circuitElement->getNodeB();
+            nodeMap[circuitElement->getNodeB()] = nodeEnd;
         }
 
         // Edge from start node to end node for nodeStart

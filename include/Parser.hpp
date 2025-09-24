@@ -33,6 +33,8 @@
 
 #include "CircuitElement.hpp"
 
+class CircuitElement;
+
 /**
  * @class Parser
  *
@@ -43,8 +45,6 @@
  * set for further processing.
  *
  * */
-
-class CircuitElement;
 
 struct ElementCounts
 {
@@ -79,6 +79,13 @@ class Parser
      *
      */
     void printParser();
+    bool validateTokens(const std::vector<std::string>& tokens, int lineNumber,
+                        int expectedSize);
+    double parseValue(const std::string& valueStr, int lineNumber, bool& valid);
+    bool validateNodes(const std::string& nodeA, const std::string& nodeB,
+                       int lineNumber);
+    void printElementCounts() const;
+    void addStabilityResistors();
 
    private:
     // element map
@@ -100,11 +107,4 @@ class Parser
                                      int lineNumber);
 
     // utility functions
-    bool validateTokens(const std::vector<std::string>& tokens, int lineNumber,
-                        int expectedSize);
-    double parseValue(const std::string& valueStr, int lineNumber, bool& valid);
-    bool validateNodes(const std::string& nodeA, const std::string& nodeB,
-                       int lineNumber);
-    void printElementCounts() const;
-    void addStabilityResistors();
 };

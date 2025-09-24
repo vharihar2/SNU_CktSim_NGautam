@@ -27,10 +27,13 @@
 
 #include <iostream>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
 #include "Parser.hpp"
+
+class Parser;
 
 /** @enum Component
  *
@@ -163,20 +166,20 @@ class CircuitElement
     std::string name;
     std::string nodeA;
     std::string nodeB;
-    Group group;
+    Group group = Group::G1;
     double value;
 
     // needs to be removed after refactor
     ElementType type;
 
     // Dont know how i feel about this being common to all elements
-    ControlVariable controlling_variable;
-    std::shared_ptr<CircuitElement> controlling_element;
-    bool processed;
+    ControlVariable controlling_variable = ControlVariable::none;
+    std::shared_ptr<CircuitElement> controlling_element = nullptr;
+    bool processed = false;
 
    public:
-    CircuitElement(const std::string& name, std::string& nodeA,
-                   std::string& nodeB, double value)
+    CircuitElement(const std::string& name, const std::string& nodeA,
+                   const std::string& nodeB, double value)
         : name(name), nodeA(nodeA), nodeB(nodeB), value(value)
     {
     }
@@ -189,9 +192,20 @@ class CircuitElement
 
     static std::shared_ptr<CircuitElement> parse(
         Parser& parser, const std::vector<std::string>& tokens, int lineNumber);
+
+    static int resolveDependencies(
+        std::vector<std::shared_ptr<CircuitElement>>& circuitElements,
+        std::map<std::string, std::shared_ptr<CircuitElement>>& elementMap,
+        std::set<std::string>& nodes_group2);
+
     bool isProcessed() const { return processed; }
     void setProcessed(bool val) { processed = val; }
+
     std::string getName() const { return name; }
+    void setName(const std::string& val) { name = val; }
+
     std::string getNodeA() const { return nodeA; }
     std::string getNodeB() const { return nodeB; }
+
+    Group getGroup() const { return group; }
 };

@@ -8,10 +8,11 @@
 class Resistor : public CircuitElement
 {
    public:
-    Resistor(const std::string& name, std::string& nodeA, std::string& nodeB,
-             double value)
+    Resistor(const std::string& name, const std::string& nodeA,
+             const std::string& nodeB, double value)
         : CircuitElement(name, nodeA, nodeB, value)
     {
+        type = ElementType::R;
     }
 
     virtual void stamp(std::vector<std::vector<double>>& mna,
