@@ -19,8 +19,12 @@
 
 /**
  * @file Parser.hpp
+ * @brief Defines the Parser class for reading and processing circuit netlists.
  *
- * @brief Contains the definition of the Parser class
+ * This file contains the definition of the Parser class, which is responsible
+ * for reading a netlist file, parsing circuit elements, and storing them for
+ * further analysis. It also defines the ElementCounts struct for tracking
+ * element statistics.
  */
 
 #pragma once
@@ -46,65 +50,162 @@ class CircuitElement;
  *
  * */
 
+/**
+ * @struct ElementCounts
+ * @brief Tracks the count of each type of circuit element encountered during
+ * parsing.
+ */
 struct ElementCounts
 {
-    int resistorCount = 0;
-    int voltageSourceCount = 0;
-    int currentSourceCount = 0;
-    int capacitorCount = 0;
-    int inductorCount = 0;
-    int depVoltageSourceCount = 0;
-    int depCurrentSourceCount = 0;
+    int resistorCount = 0; /**< Number of resistors parsed */
+    int voltageSourceCount =
+        0; /**< Number of independent voltage sources parsed */
+    int currentSourceCount =
+        0;                  /**< Number of independent current sources parsed */
+    int capacitorCount = 0; /**< Number of capacitors parsed */
+    int inductorCount = 0;  /**< Number of inductors parsed */
+    int depVoltageSourceCount =
+        0; /**< Number of dependent voltage sources parsed */
+    int depCurrentSourceCount =
+        0; /**< Number of dependent current sources parsed */
 };
 
+/**
+ * @class Parser
+ * @brief Parses a netlist file and stores the circuit elements for analysis.
+ *
+ * The Parser class reads a netlist file, parses each line into circuit
+ * elements, and stores them in a vector. It also tracks node names and group_2
+ * circuit element names for further processing and analysis.
+ */
 class Parser
 {
    public:
-    std::vector<std::shared_ptr<CircuitElement>>
-        circuitElements; /**< Stores the circuit elements in form of a vector */
-    std::set<std::string> nodes_group2; /**< Stores all node names and group_2
-                                         circuit element names*/
+    /**
+     * @brief Stores the parsed circuit elements as a vector of shared pointers.
+     */
+    std::vector<std::shared_ptr<CircuitElement>> circuitElements;
+    /**
+     * @brief Stores all node names and group_2 circuit element names.
+     */
+    std::set<std::string> nodes_group2;
 
     /**
-     * @brief		Parses the file (netlist) into a vector
-     *
-     * @param	file The name of the file
-     *
-     * @return		number of errors in the netlist
+     * @brief Parses the netlist file and populates circuitElements and
+     * nodes_group2.
+     * @param file The name of the netlist file to parse.
+     * @return The number of errors encountered in the netlist.
      */
     int parse(const std::string& file);
 
     /**
-     * @brief		Prints the vectors which contains the circuit elements
-     *
+     * @brief Prints the vector containing the parsed circuit elements.
      */
     void printParser();
+
+    /**
+     * @brief Validates the number of tokens in a parsed line.
+     * @param tokens The vector of tokens from the line.
+     * @param lineNumber The line number in the netlist file.
+     * @param expectedSize The expected number of tokens.
+     * @return True if the number of tokens matches expectedSize, false
+     * otherwise.
+     */
     bool validateTokens(const std::vector<std::string>& tokens, int lineNumber,
                         int expectedSize);
+
+    /**
+     * @brief Parses a value string into a double.
+     * @param valueStr The string representing the value.
+     * @param lineNumber The line number in the netlist file.
+     * @param valid Reference to a bool set to true if parsing succeeds, false
+     * otherwise.
+     * @return The parsed double value.
+     */
     double parseValue(const std::string& valueStr, int lineNumber, bool& valid);
+
+    /**
+     * @brief Validates the node names for a circuit element.
+     * @param nodeA The name of the first node.
+     * @param nodeB The name of the second node.
+     * @param lineNumber The line number in the netlist file.
+     * @return True if the nodes are valid, false otherwise.
+     */
     bool validateNodes(const std::string& nodeA, const std::string& nodeB,
                        int lineNumber);
+
+    /**
+     * @brief Prints the counts of each type of circuit element parsed.
+     */
     void printElementCounts() const;
+
+    /**
+     * @brief Adds stability resistors to the circuit for numerical stability.
+     */
     void addStabilityResistors();
 
    private:
-    // element map
+    /**
+     * @brief Map from element names to their corresponding CircuitElement
+     * pointers.
+     */
     std::map<std::string, std::shared_ptr<CircuitElement>> elementMap;
+    /**
+     * @brief Struct for tracking the count of each element type.
+     */
     ElementCounts elementCounts;
+    /**
+     * @brief Value used for stability resistors.
+     */
     constexpr static double STABILITY_RESISTOR_VALUE = 1e12;
 
-    // One function per element type
+    // Parsing functions for each element type
+    /**
+     * @brief Parses a resistor element from tokens.
+     * @param tokens Vector of tokens from the netlist line.
+     * @param lineNumber Line number in the netlist file.
+     */
     void parseResistor(const std::vector<std::string>& tokens, int lineNumber);
+    /**
+     * @brief Parses a voltage source element from tokens.
+     * @param tokens Vector of tokens from the netlist line.
+     * @param lineNumber Line number in the netlist file.
+     */
     void parseVoltageSource(const std::vector<std::string>& tokens,
                             int lineNumber);
+    /**
+     * @brief Parses a current source element from tokens.
+     * @param tokens Vector of tokens from the netlist line.
+     * @param lineNumber Line number in the netlist file.
+     */
     void parseCurrentSource(const std::vector<std::string>& tokens,
                             int lineNumber);
+    /**
+     * @brief Parses a capacitor element from tokens.
+     * @param tokens Vector of tokens from the netlist line.
+     * @param lineNumber Line number in the netlist file.
+     */
     void parseCapacitor(const std::vector<std::string>& tokens, int lineNumber);
+    /**
+     * @brief Parses an inductor element from tokens.
+     * @param tokens Vector of tokens from the netlist line.
+     * @param lineNumber Line number in the netlist file.
+     */
     void parseInductor(const std::vector<std::string>& tokens, int lineNumber);
+    /**
+     * @brief Parses a dependent voltage source element from tokens.
+     * @param tokens Vector of tokens from the netlist line.
+     * @param lineNumber Line number in the netlist file.
+     */
     void parseDependentVoltageSource(const std::vector<std::string>& tokens,
                                      int lineNumber);
+    /**
+     * @brief Parses a dependent current source element from tokens.
+     * @param tokens Vector of tokens from the netlist line.
+     * @param lineNumber Line number in the netlist file.
+     */
     void parseDependentCurrentSource(const std::vector<std::string>& tokens,
                                      int lineNumber);
 
-    // utility functions
+    // Additional utility functions as needed
 };

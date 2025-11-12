@@ -19,8 +19,12 @@
 
 /**
  * @file CircuitElement.hpp
+ * @brief Defines the CircuitElement base class and related enums
  *
- * @brief Contains the definition of the CircuitElement struct
+ * This file contains the definition of the CircuitElement base class, which
+ * represents a generic element in an electrical circuit. It also defines enums
+ * for element type, grouping, and control variable, as well as utility
+ * functions and the interface for parsing and dependency resolution.
  */
 
 #pragma once
@@ -35,20 +39,19 @@
 
 class Parser;
 
-/** @enum Component
- *
- * Specifies the type of element that are supported by CircuitElement
- * */
+/**
+ * @enum ElementType
+ * @brief Specifies the type of circuit element supported by CircuitElement.
+ */
 enum class ElementType
 {
-    V,  /**<  Voltage source */
-    I,  /**<  Current source */
-    R,  /**<  Resistor */
-    Ic, /**<  Current controlled current source */
-    Vc, /**<  Voltage controlled voltage source */
-    C,  /**<  Capacitor */
-    L,  /**< Inductor */
-
+    V,  /**< Voltage source */
+    I,  /**< Current source */
+    R,  /**< Resistor */
+    Ic, /**< Current controlled current source */
+    Vc, /**< Voltage controlled voltage source */
+    C,  /**< Capacitor */
+    L   /**< Inductor */
 };
 
 inline std::ostream& operator<<(std::ostream& os, ElementType et)
@@ -81,14 +84,17 @@ inline std::ostream& operator<<(std::ostream& os, ElementType et)
     }
     return os;
 }
-/** @enum Gruoup
+/**
+ * @enum Group
+ * @brief Specifies the group of circuit elements for matrix handling.
  *
- * Specifies the group of element that are supported by CircuitElement
- * */
+ * Group 1: Elements whose currents need to be eliminated.
+ * Group 2: Elements not in Group 1; other methods must be employed.
+ */
 enum class Group
 {
-    G1 /**< Group 1: the currents for these elements need to be eliminated */,
-    G2 /** Group 2: Elements not in G1. Other methods must be employed*/
+    G1, /**< Group 1: the currents for these elements need to be eliminated */
+    G2  /**< Group 2: Elements not in G1. Other methods must be employed */
 };
 
 inline std::ostream& operator<<(std::ostream& os, Group group)
@@ -106,14 +112,14 @@ inline std::ostream& operator<<(std::ostream& os, Group group)
     }
     return os;
 }
-/** @enum ControlVariable
- *
- * @brief Specifies the controlling variable for controlled sources
- * */
+/**
+ * @enum ControlVariable
+ * @brief Specifies the controlling variable for controlled sources.
+ */
 enum class ControlVariable
 {
-    none, /**<  No controlling variable */
-    v,    /**<  Voltage */
+    none, /**< No controlling variable */
+    v,    /**< Voltage */
     i     /**< Current */
 };
 
@@ -136,76 +142,145 @@ inline std::ostream& operator<<(std::ostream& os, ControlVariable cv)
     return os;
 }
 
-/** @struct CircuitElement
+/**
+ * @class CircuitElement
+ * @brief Base class representing a generic element in an electrical circuit.
  *
- * @brief Represents the properties of any element in the circuit
- * */
-
-// struct CircuitElement
-// {
-//     std::string name;  /**< Name of the element*/
-//     ElementType type;  /**< Specifies the type of the circuit element  */
-//     std::string nodeA; /**< Starting node */
-//     std::string nodeB; /**< Ending node */
-//     Group group;       /**< Specifier if it belongs to  Group 1 or Group 2 */
-//     double value; /**< Value of the element (or scale factor if it is
-//     controlled
-//                      source)*/
-//     ControlVariable controlling_variable; /**< Only for controlled sources,
-//                                      variable that the element depends on  */
-//     std::shared_ptr<CircuitElement>
-//         controlling_element; /**< Only for controlled sources, element whose
-//                                 value that the current element depends on  */
-//     bool processed;          /**< Flag value to know whether it is processed
-//     */
-// };
-
+ * This class provides the common interface and properties for all circuit
+ * elements, such as resistors, capacitors, inductors, sources, and controlled
+ * sources. Derived classes implement specific behavior for each element type.
+ */
 class CircuitElement
 {
    protected:
+    /**
+     * @brief Name of the element (unique identifier)
+     */
     std::string name;
+    /**
+     * @brief Name of the starting node
+     */
     std::string nodeA;
+    /**
+     * @brief Name of the ending node
+     */
     std::string nodeB;
+    /**
+     * @brief Group classification for the element (G1 or G2)
+     */
     Group group = Group::G1;
+    /**
+     * @brief Value of the element (e.g., resistance, capacitance, etc.)
+     */
     double value;
-
-    // needs to be removed after refactor
+    /**
+     * @brief Type of the element (enum)
+     * @note This may be removed after refactor.
+     */
+    // TODO: Remove after full reafactor
     ElementType type;
-
-    // Dont know how i feel about this being common to all elements
+    /**
+     * @brief Controlling variable for controlled sources (none, voltage,
+     * current)
+     */
     ControlVariable controlling_variable = ControlVariable::none;
+    /**
+     * @brief Pointer to the controlling element (for controlled sources)
+     */
     std::shared_ptr<CircuitElement> controlling_element = nullptr;
+    /**
+     * @brief Flag indicating whether the element has been processed
+     */
     bool processed = false;
 
    public:
+    /**
+     * @brief Construct a CircuitElement
+     * @param name Name of the element
+     * @param nodeA Starting node name
+     * @param nodeB Ending node name
+     * @param value Value of the element
+     */
     CircuitElement(const std::string& name, const std::string& nodeA,
                    const std::string& nodeB, double value)
         : name(name), nodeA(nodeA), nodeB(nodeB), value(value)
     {
     }
 
+    /**
+     * @brief Virtual destructor
+     */
     virtual ~CircuitElement() = default;
 
+    /**
+     * @brief Stamps the element's contribution into the MNA matrix and RHS
+     * vector
+     * @param mna Modified Nodal Analysis matrix
+     * @param rhs Right-hand side vector
+     * @param indexMap Map from node/element names to matrix indices
+     */
     virtual void stamp(std::vector<std::vector<double>>& mna,
                        std::vector<double>& rhs,
                        std::map<std::string, int>& indexMap) = 0;
 
+    /**
+     * @brief Parses a circuit element from tokens
+     * @param parser Reference to the parser
+     * @param tokens Tokenized line from netlist
+     * @param lineNumber Line number in netlist
+     * @return Shared pointer to created CircuitElement
+     */
     static std::shared_ptr<CircuitElement> parse(
         Parser& parser, const std::vector<std::string>& tokens, int lineNumber);
 
+    /**
+     * @brief Resolves dependencies for controlled sources
+     * @param circuitElements Vector of all circuit elements
+     * @param elementMap Map from element names to CircuitElement pointers
+     * @param nodes_group2 Set of node names and group_2 element names
+     * @return Number of errors encountered
+     */
     static int resolveDependencies(
         std::vector<std::shared_ptr<CircuitElement>>& circuitElements,
         std::map<std::string, std::shared_ptr<CircuitElement>>& elementMap,
         std::set<std::string>& nodes_group2);
 
+    /**
+     * @brief Checks if the element has been processed
+     * @return True if processed, false otherwise
+     */
     bool isProcessed() const { return processed; }
+    /**
+     * @brief Sets the processed flag
+     * @param val New value for processed flag
+     */
     void setProcessed(bool val) { processed = val; }
 
+    /**
+     * @brief Gets the element name
+     * @return Name of the element
+     */
     std::string getName() const { return name; }
+    /**
+     * @brief Sets the element name
+     * @param val New name
+     */
     void setName(const std::string& val) { name = val; }
 
+    /**
+     * @brief Gets the starting node name
+     * @return Name of nodeA
+     */
     std::string getNodeA() const { return nodeA; }
+    /**
+     * @brief Gets the ending node name
+     * @return Name of nodeB
+     */
     std::string getNodeB() const { return nodeB; }
 
+    /**
+     * @brief Gets the group classification
+     * @return Group enum value
+     */
     Group getGroup() const { return group; }
 };

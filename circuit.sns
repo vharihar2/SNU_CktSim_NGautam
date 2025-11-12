@@ -1,13 +1,6 @@
-% Voltage Sources 
-V1 2 4 1
-
-% Controlled Current Source 
-IC1 0 3 10 v R1
-
-% Resistors 
-R1 2 0 10
-R2 3 4 20
-R3 0 4 30
-R4 3 0 40
-R5 0 4 50
+V1 1 0 10         
+R1 1 2 1000       
+L1 2 0 1e-3      
+I1 1 2 0.005    
+C1 2 0 1e-6    
 

@@ -19,8 +19,12 @@
 
 /**
  * @file Edge.hpp
+ * @brief Defines the Edge class for representing connections between nodes in a
+ * circuit graph.
  *
- * @brief Contains the definition of the Edge class
+ * This file contains the definition of the Edge class, which models a
+ * connection (edge) between two nodes in the circuit graph. Each edge is
+ * associated with a circuit element.
  */
 
 #pragma once
@@ -35,19 +39,25 @@ class Node;
 
 /**
  * @class Edge
+ * @brief Represents a connection (edge) between two nodes in the circuit graph.
  *
- * @brief Represents an edge in the graph
- *
- * Each edge represents a circuit element that is connected bettween two Node.
- *
- * */
+ * The Edge class models a connection between two nodes in the circuit. Each
+ * edge is associated with a specific circuit element (such as a resistor,
+ * capacitor, etc.).
+ */
 class Edge
 {
    public:
-    std::shared_ptr<Node>
-        source; /**< Pointer to starting node of the element */
-    std::shared_ptr<Node> target; /**< Pointer to ending node of the element */
-    std::shared_ptr<CircuitElement>
-        circuitElement; /**< Pointer to the circuit element that the edge
-                           represents */
+    /**
+     * @brief Pointer to the source (starting) node of the edge
+     */
+    std::shared_ptr<Node> source;
+    /**
+     * @brief Pointer to the target (ending) node of the edge
+     */
+    std::shared_ptr<Node> target;
+    /**
+     * @brief Pointer to the circuit element that this edge represents
+     */
+    std::shared_ptr<CircuitElement> circuitElement;
 };

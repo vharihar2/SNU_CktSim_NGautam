@@ -19,8 +19,11 @@
 
 /**
  * @file Node.hpp
+ * @brief Defines the Node class for representing nodes in a circuit graph.
  *
- * @brief Contains the definition of the Node class
+ * This file contains the definition of the Node class, which models a node in
+ * the circuit graph. Each node can be connected to multiple edges and is used
+ * in the construction and traversal of the circuit for analysis.
  */
 
 #pragma once
@@ -37,31 +40,40 @@ class Edge;
 
 /**
  * @class Node
+ * @brief Represents a node in the circuit graph.
  *
- * @brief Represents a node in the graph
- *
- * Each node represents a circuit element that is connected between two Node.
- * */
-
+ * The Node class models a node in the circuit, which can be connected to
+ * multiple edges (circuit elements). Nodes are used to build the graph
+ * representation of the circuit for analysis and simulation.
+ */
 class Node
 {
    public:
-    std::string name; /**< Name of the node */
-    std::vector<std::shared_ptr<Edge>>
-        edges;      /**< List of edges connected to the node */
-    bool processed; /**< Flag value to know whether it is processed */
+    /**
+     * @brief Name of the node (unique identifier)
+     */
+    std::string name;
+    /**
+     * @brief List of edges (connections) attached to this node
+     */
+    std::vector<std::shared_ptr<Edge>> edges;
+    /**
+     * @brief Flag indicating whether this node has been processed during
+     * traversal
+     */
+    bool processed;
 
     /**
-     * @brief		Traverses the map (graph of the circuit) and
-     *				populates the MNA and RHS matrices
+     * @brief Traverses the circuit graph from this node and populates the MNA
+     * and RHS matrices.
      *
-     * @param	[indexMap] map<string, int>
+     * This function visits all connected edges and updates the Modified Nodal
+     * Analysis (MNA) matrix and the right-hand side (RHS) vector for circuit
+     * analysis.
      *
-     * @param	[out] mna The left hand side matrix for the modified
-     *nodal analysis equation
-     *
-     * @param [out] rhs An 1 x n vector representing  the
-     *independent voltage sources
+     * @param indexMap Map from node/element names to matrix indices
+     * @param mna Reference to the MNA matrix to be populated
+     * @param rhs Reference to the RHS vector to be populated
      */
     void traverse(std::map<std::string, int> &indexMap,
                   std::vector<std::vector<double>> &mna,

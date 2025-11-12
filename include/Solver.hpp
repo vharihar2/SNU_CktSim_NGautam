@@ -33,55 +33,51 @@
  */
 
 /**
- * @brief		Creates map of nodes and group_2 element to
- *				index position of in MNA and RHS matrices
+ * @brief Creates a map of nodes and group_2 elements to their index positions
+ * in MNA and RHS matrices.
  *
- * @param		 indexMap A map storing the name of the node and its
- *corresponding index in the MNA and RHS matrices
- * @param		parser passes the created parser object to the function
- *
+ * @param indexMap Map storing the name of the node/element and its
+ * corresponding index in the MNA and RHS matrices.
+ * @param parser Reference to the created Parser object.
  */
 void makeIndexMap(std::map<std::string, int> &indexMap, Parser &parser);
 
 /**
- * @brief		Prints the MNA, x and RHS matrices
+ * @brief Prints the MNA matrix and RHS vector.
  *
- * @param		mna MNA Matrix
- * @param		indexmap Created index map from the makeIndexMap
- * function
- * @param		rhs RHS vector
- *
+ * @param mna The Modified Nodal Analysis (MNA) matrix.
+ * @param indexMap The index map created by makeIndexMap.
+ * @param rhs The right-hand side vector.
  */
 void printMNAandRHS(std::vector<std::vector<double>> &mna,
                     std::map<std::string, int> &indexMap,
                     std::vector<double> &rhs);
 
 /**
- * @brief		Creates graph from the vector for traversal
+ * @brief Creates the circuit graph from the vector of elements for traversal.
  *
- * @param[ref]	nodeMap map<string, shared_ptr<Node>>
- * @param		parser Parser
- *
+ * @param nodeMap Map from node names to shared pointers to Node objects.
+ * @param parser Reference to the Parser object.
  */
 void makeGraph(std::map<std::string, std::shared_ptr<Node>> &nodeMap,
                Parser &parser);
 
 /**
- * @brief		Print the solution of x along with unknown variables
+ * @brief Prints the solution vector X along with unknown variables.
  *
- * @param   	indexMap map<string, int>
- * @param		X Eigen::MatrixXd
- *
+ * @param indexMap Map from variable names to indices.
+ * @param X Solution vector (Eigen::MatrixXd).
  */
 void printxX(std::map<std::string, int> &indexMap, Eigen::MatrixXd &X);
 
 /**
- * @brief		Runs the solver
- * The function contains the entire functionality to run the solver
+ * @brief Runs the circuit solver.
  *
- * @param		argc Number of arguments
- * @param		argv Arguments
+ * This function contains the entire workflow to run the solver, including
+ * parsing, matrix construction, and solution.
  *
- * @return		0 if successful else 1
+ * @param argc Number of command-line arguments.
+ * @param argv Array of command-line argument strings.
+ * @return 0 if successful, else 1.
  */
 int runSolver(int argc, char *argv[]);
