@@ -1,5 +1,7 @@
 #include "DependentCurrentSource.hpp"
 
+#include "Parser.hpp"
+
 std::shared_ptr<CircuitElement> DependentCurrentSource::parse(
     Parser& parser, const std::vector<std::string>& tokens, int lineNumber)
 {

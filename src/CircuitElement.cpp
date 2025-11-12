@@ -1,5 +1,6 @@
 #include "CircuitElement.hpp"
 
+#include <map>
 #include <set>
 #include <string>
 

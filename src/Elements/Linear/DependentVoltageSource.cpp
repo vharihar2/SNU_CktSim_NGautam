@@ -1,5 +1,7 @@
 #include "DependentVoltageSource.hpp"
 
+#include "Parser.hpp"
+
 std::shared_ptr<CircuitElement> DependentVoltageSource::parse(
     Parser& parser, const std::vector<std::string>& tokens, int lineNumber)
 {

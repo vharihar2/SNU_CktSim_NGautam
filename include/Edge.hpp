@@ -31,11 +31,9 @@
 
 #include <memory>
 
-#include "CircuitElement.hpp"
-#include "Node.hpp"
-
 // Forward Declaration
 class Node;
+class CircuitElement;
 
 /**
  * @class Edge

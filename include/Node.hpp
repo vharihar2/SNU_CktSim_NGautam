@@ -19,7 +19,7 @@
 
 /**
  * @file Node.hpp
- * @brief Defines the Node class for representing nodes in a circuit graph.
+ * @brief Defines the Node class for representing nodes in the circuit graph.
  *
  * This file contains the definition of the Node class, which models a node in
  * the circuit graph. Each node can be connected to multiple edges and is used
@@ -32,8 +32,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-
-#include "Edge.hpp"
 
 // Forward Declaration
 class Edge;

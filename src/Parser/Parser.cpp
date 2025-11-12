@@ -40,11 +40,10 @@
 #include "DependentVoltageSource.hpp"
 #include "Inductor.hpp"
 #include "Resistor.hpp"
+#include "Solver.hpp"
 #include "VoltageSource.hpp"
 
-using std::cout, std::endl;
-
-int Parser::parse(const std::string& fileName)
+int Parser::parse(const std::string& fileName, SolverDirectiveType& directive)
 {
     std::ifstream fileStream(fileName);
     if (!fileStream) {
@@ -112,10 +111,21 @@ int Parser::parse(const std::string& fileName)
         } else if (tokens[0].find("IC") == 0) {
             ++elementCounts.depCurrentSourceCount;
             element = DependentCurrentSource::parse(*this, tokens, lineNumber);
+
+        } else if (tokens[0].find(".OP") == 0) {
+            // Operational point directive
+            if (directive != SolverDirectiveType::NONE) {
+                std::cerr << "Warning: Multiple directives found. Using the "
+                             "first one."
+                          << std::endl;
+                ++errorCount;
+            }
+            directive = SolverDirectiveType::OPERATING_POINT;
+
         } else {
             std::cerr << "Error: Unknown element at line " << lineNumber << ": "
                       << line << std::endl;
-            errorCount++;
+            ++errorCount;
         }
 
         if (element) {

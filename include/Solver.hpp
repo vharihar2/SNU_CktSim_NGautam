@@ -81,3 +81,13 @@ void printxX(std::map<std::string, int> &indexMap, Eigen::MatrixXd &X);
  * @return 0 if successful, else 1.
  */
 int runSolver(int argc, char *argv[]);
+/**
+ * @enum SolverDirectiveType
+ * @brief Specifies the type of simulation directive for the solver.
+ */
+enum class SolverDirectiveType
+{
+    NONE,            /**< No specific directive */
+    OPERATING_POINT, /**< Operating point analysis */
+    TRANSIENT        /**< Transient analysis */
+};

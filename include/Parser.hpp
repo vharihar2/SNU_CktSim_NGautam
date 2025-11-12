@@ -37,7 +37,9 @@
 
 #include "CircuitElement.hpp"
 
+// Forward Declaration
 class CircuitElement;
+enum class SolverDirectiveType;
 
 /**
  * @class Parser
@@ -93,10 +95,14 @@ class Parser
     /**
      * @brief Parses the netlist file and populates circuitElements and
      * nodes_group2.
+     *
      * @param file The name of the netlist file to parse.
+     * @param directive This updates the variable in the calling function to
+     * reflect the type of simulation
+     *
      * @return The number of errors encountered in the netlist.
      */
-    int parse(const std::string& file);
+    int parse(const std::string& file, SolverDirectiveType& directive);
 
     /**
      * @brief Prints the vector containing the parsed circuit elements.

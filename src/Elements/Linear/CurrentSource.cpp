@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "Parser.hpp"
+
 std::shared_ptr<CircuitElement> CurrentSource::parse(
     Parser& parser, const std::vector<std::string>& tokens, int lineNumber)
 {

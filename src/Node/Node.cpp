@@ -25,6 +25,9 @@
 
 #include "Node.hpp"
 
+#include "CircuitElement.hpp"
+#include "Edge.hpp"
+
 void Node::traverse(std::map<std::string, int> &indexMap,
                     std::vector<std::vector<double>> &mna,
                     std::vector<double> &rhs)

@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "CircuitElement.hpp"
+#include "Parser.hpp"
 
 void Capacitor::stamp(std::vector<std::vector<double>>& mna,
                       std::vector<double>& rhs,

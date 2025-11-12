@@ -27,6 +27,9 @@
 
 #include <iomanip>
 #include <iostream>
+
+#include "Edge.hpp"
+
 void makeIndexMap(std::map<std::string, int> &indexMap, Parser &parser)
 {
     int i = 0;
@@ -122,7 +125,8 @@ int runSolver(int argc, char *argv[])
 
     // Creates a parser to store the circuit in form of vector
     Parser parser;
-    if (parser.parse(filename) != 0) return 1;
+    SolverDirectiveType directive = SolverDirectiveType::NONE;
+    if (parser.parse(filename, directive) != 0) return 1;
 
     // Map to store all nodes' and group_2 elements' index position in MNA and
     // RHS matrix
