@@ -271,10 +271,16 @@ int runTransient(Parser &parser,
         return 0;
     }
 
-    // Build (and factorize) A for the current h
-    Eigen::MatrixXd A = assembleMatrixOnly(parser, nodeMap, indexMap, h);
-    Eigen::PartialPivLU<Eigen::MatrixXd> lu;
-    if (A.size() > 0) lu.compute(A);
+    // Newton/TR solver parameters (sane defaults)
+    // - maxNewtonIterations: maximum Newton iterations per timestep
+    // - tolAbs: absolute tolerance on solution increment
+    // - tolRel: relative tolerance on solution increment
+    // - tolResidual: tolerance on linear residual ||A_k x - b||
+    const int maxNewtonIterations =
+        50;  // allow enough iterations for difficult nonlinearities
+    const double tolAbs = 1e-9;       // absolute increment tolerance
+    const double tolRel = 1e-6;       // relative increment tolerance
+    const double tolResidual = 1e-8;  // residual tolerance (A x - b)
 
     // Prepare per-step containers
     std::vector<double> rhs_std(n, 0.0);
@@ -320,38 +326,103 @@ int runTransient(Parser &parser,
     for (int step = 0; step < steps; ++step) {
         double t = (step + 1) * h;  // time at end of step (t_{n+1})
 
-        // 1) Update companion parameters (Ieq depends on previous state)
-        for (auto &el : parser.circuitElements) {
-            if (el) el->computeCompanion(h);
-        }
+        // Newton iterations per time-step (TR-only). Start with previous
+        // timestep solution as initial guess.
+        Eigen::VectorXd xk = x0;  // initial guess: last converged solution
+        if (xk.size() != n) xk = Eigen::VectorXd::Zero(n);
 
-        // 2) Build RHS for this step (do not modify A)
-        std::fill(rhs_std.begin(), rhs_std.end(), 0.0);
-        for (auto &row : mna_dummy) std::fill(row.begin(), row.end(), 0.0);
-
-        // Ensure stamps will run
-        resetProcessedFlags(nodeMap, parser.circuitElements);
-
-        // Traverse and stamp transient contributions into rhs_std (mna_dummy
-        // ignored)
-        for (auto &p : nodeMap) {
-            auto nodePtr = p.second;
-            if (!nodePtr) continue;
-            if (nodePtr->name == "0") continue;
-            if (!nodePtr->processed) {
-                nodePtr->traverse(indexMap, mna_dummy, rhs_std, true);
+        bool converged = false;
+        for (int iter = 0; iter < maxNewtonIterations; ++iter) {
+            // 1) For nonlinear elements compute companions at current iterate
+            for (auto &el : parser.circuitElements) {
+                if (el) el->computeCompanionIter(h, xk, indexMap);
             }
+
+            // 2) Assemble A_k and b_k for this Newton iterate
+            std::fill(rhs_std.begin(), rhs_std.end(), 0.0);
+            for (auto &row : mna_dummy) std::fill(row.begin(), row.end(), 0.0);
+            resetProcessedFlags(nodeMap, parser.circuitElements);
+            for (auto &p : nodeMap) {
+                auto nodePtr = p.second;
+                if (!nodePtr) continue;
+                if (nodePtr->name == "0") continue;
+                if (!nodePtr->processed) {
+                    nodePtr->traverse(indexMap, mna_dummy, rhs_std, true);
+                }
+            }
+
+            // convert mna_dummy -> Eigen A_k
+            std::vector<double> flat;
+            flat.reserve(n * n);
+            for (int i = 0; i < n; ++i) {
+                for (int j = 0; j < n; ++j) flat.push_back(mna_dummy[i][j]);
+            }
+            Eigen::MatrixXd A_k;
+            if (n > 0) {
+                A_k.resize(n, n);
+                A_k = Eigen::MatrixXd::Map(flat.data(), n, n).transpose();
+            } else {
+                A_k.resize(0, 0);
+            }
+
+            b = Eigen::Map<Eigen::VectorXd>(rhs_std.data(), n);
+
+            // 3) Solve A_k * x_new = b
+            Eigen::VectorXd x_new(n);
+            if (A_k.size() > 0) {
+                Eigen::PartialPivLU<Eigen::MatrixXd> lu_k;
+                lu_k.compute(A_k);
+                x_new = lu_k.solve(b);
+            } else {
+                x_new.setZero();
+            }
+
+            // 4) Compute delta and residual norms for convergence tests
+            Eigen::VectorXd delta = x_new - xk;
+            double deltaNorm = delta.norm();
+            double relTol = tolRel * (1.0 + x_new.norm());
+
+            // residual r = A_k * x_new - b
+            double residualNorm = 0.0;
+            if (A_k.size() > 0) {
+                Eigen::VectorXd r = A_k * x_new - b;
+                residualNorm = r.norm();
+            }
+
+            // Diagnostic printing: print detailed Newton progress for first few
+            // timesteps to avoid flooding output for long simulations.
+            if (step < 5 || step == steps - 1) {
+                std::cout << "  Newton iter " << (iter + 1)
+                          << ": deltaNorm=" << deltaNorm
+                          << " residualNorm=" << residualNorm << std::endl;
+            }
+
+            // Convergence if either increment or residual tolerance met
+            if (deltaNorm <= tolAbs || deltaNorm <= relTol ||
+                residualNorm <= tolResidual) {
+                x = x_new;
+                converged = true;
+                if (step < 5 || step == steps - 1) {
+                    std::cout << "  Converged at iter " << (iter + 1)
+                              << " deltaNorm=" << deltaNorm
+                              << " residualNorm=" << residualNorm << std::endl;
+                }
+                break;
+            }
+
+            // 5) prepare next iterate
+            xk = x_new;
         }
 
-        // 3) Solve A x = b
-        b = Eigen::Map<Eigen::VectorXd>(rhs_std.data(), n);
-        if (A.size() > 0) {
-            x = lu.solve(b);
-        } else {
-            x.setZero();
+        if (!converged) {
+            std::cerr << "Warning: Newton did not converge in "
+                      << maxNewtonIterations << " iterations at t=" << t
+                      << std::endl;
+            // Accept last iterate
+            x = xk;
         }
 
-        // 4) Update element states from solution
+        // Update element states from final solution x
         for (auto &el : parser.circuitElements) {
             if (el) el->updateStateFromSolution(x, indexMap);
         }

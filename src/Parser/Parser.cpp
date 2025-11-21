@@ -39,6 +39,8 @@
 #include "DependentCurrentSource.hpp"
 #include "DependentVoltageSource.hpp"
 #include "Inductor.hpp"
+#include "NonlinearCapacitor.hpp"
+#include "NonlinearInductor.hpp"
 #include "Resistor.hpp"
 #include "Solver.hpp"
 #include "VoltageSource.hpp"
@@ -95,12 +97,88 @@ int Parser::parse(const std::string& fileName, SolverDirectiveType& directive)
             element = CurrentSource::parse(*this, tokens, lineNumber);
         } else if (tokens[0].find("C") == 0) {
             ++elementCounts.capacitorCount;
-            element = Capacitor::parse(*this, tokens, lineNumber);
+            // Support optional nonlinear polynomial model syntax:
+            // Cname nodeA nodeB value [POLY coeff0 coeff1 ...]
+            if (tokens.size() >= 5 && tokens[4] == "POLY") {
+                // Parse base value
+                bool validValue = false;
+                double value = parseValue(tokens[3], lineNumber, validValue);
+                if (!validValue) {
+                    std::cerr << "Line " << lineNumber
+                              << ": Invalid capacitor value" << std::endl;
+                    ++errorCount;
+                } else {
+                    // Parse coefficients from tokens[5]..end
+                    std::vector<double> coeffs;
+                    for (size_t i = 5; i < tokens.size(); ++i) {
+                        bool ok = false;
+                        double c = parseValue(tokens[i], lineNumber, ok);
+                        if (!ok) {
+                            std::cerr << "Line " << lineNumber
+                                      << ": Invalid polynomial coefficient '"
+                                      << tokens[i] << "'" << std::endl;
+                            ++errorCount;
+                            break;
+                        }
+                        coeffs.push_back(c);
+                    }
+                    if (!coeffs.empty()) {
+                        auto model = makePolynomialChargeModel(coeffs);
+                        element = std::make_shared<NonlinearCapacitor>(
+                            tokens[0], tokens[1], tokens[2], value, model);
+                    } else {
+                        std::cerr << "Line " << lineNumber
+                                  << ": POLY specified but no coefficients"
+                                  << std::endl;
+                        ++errorCount;
+                    }
+                }
+            } else {
+                element = Capacitor::parse(*this, tokens, lineNumber);
+            }
         } else if (tokens[0].find("L") == 0) {
             ++elementCounts.inductorCount;
-            element = Inductor::parse(*this, tokens, lineNumber);
-            if (element) {
-                nodes_group2.insert(element->getName());
+            // Support optional nonlinear polynomial model syntax for inductors:
+            // Lname nodeA nodeB value [POLY coeff0 coeff1 ...]
+            if (tokens.size() >= 5 && tokens[4] == "POLY") {
+                bool validValue = false;
+                double value = parseValue(tokens[3], lineNumber, validValue);
+                if (!validValue) {
+                    std::cerr << "Line " << lineNumber
+                              << ": Invalid inductor value" << std::endl;
+                    ++errorCount;
+                } else {
+                    std::vector<double> coeffs;
+                    for (size_t i = 5; i < tokens.size(); ++i) {
+                        bool ok = false;
+                        double c = parseValue(tokens[i], lineNumber, ok);
+                        if (!ok) {
+                            std::cerr << "Line " << lineNumber
+                                      << ": Invalid polynomial coefficient '"
+                                      << tokens[i] << "'" << std::endl;
+                            ++errorCount;
+                            break;
+                        }
+                        coeffs.push_back(c);
+                    }
+                    if (!coeffs.empty()) {
+                        auto model = makePolynomialFluxModel(coeffs);
+                        element = std::make_shared<NonlinearInductor>(
+                            tokens[0], tokens[1], tokens[2], value, model);
+                        // ensure branch variable present
+                        nodes_group2.insert(element->getName());
+                    } else {
+                        std::cerr << "Line " << lineNumber
+                                  << ": POLY specified but no coefficients"
+                                  << std::endl;
+                        ++errorCount;
+                    }
+                }
+            } else {
+                element = Inductor::parse(*this, tokens, lineNumber);
+                if (element) {
+                    nodes_group2.insert(element->getName());
+                }
             }
         } else if (tokens[0].find("VC") == 0) {
             ++elementCounts.depVoltageSourceCount;

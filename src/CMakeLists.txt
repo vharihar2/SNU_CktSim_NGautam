@@ -1,5 +1,6 @@
 file(GLOB ELEMENTS_LINEAR_SRC "${CMAKE_CURRENT_SOURCE_DIR}/Elements/Linear/*.cpp")
-file(GLOB ELEMENTS_NONLINEAR_SRC "${CMAKE_CURRENT_SOURCE_DIR}/Elements/Non_Linear/*.cpp")
+# Nonlinear element sources live in Elements/Nonlinear (no underscore)
+file(GLOB ELEMENTS_NONLINEAR_SRC "${CMAKE_CURRENT_SOURCE_DIR}/Elements/Nonlinear/*.cpp")
 
 set(SOURCE_FILES
     main.cpp

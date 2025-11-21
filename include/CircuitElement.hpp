@@ -226,7 +226,24 @@ class CircuitElement
                        std::map<std::string, int>& indexMap) = 0;
 
     // NOTE: --- Transient / time-domain hooks --
+    // Backwards-compatible companion computation for linear elements.
     virtual void computeCompanion([[maybe_unused]] double h) {}
+
+    // Per-Newton-iteration companion computation for TR nonlinear solves.
+    // Default implementation forwards to the legacy `computeCompanion(h)` so
+    // existing linear elements continue to work without change.
+    virtual void computeCompanionIter(
+        [[maybe_unused]] double h,
+        [[maybe_unused]] const Eigen::Ref<const Eigen::VectorXd>& xk,
+        [[maybe_unused]] const std::map<std::string, int>& indexMap)
+    {
+        computeCompanion(h);
+    }
+
+    // Flag indicating whether this element is nonlinear. Nonlinear elements
+    // should override this to return true so the solver can decide whether to
+    // call iterative companion routines.
+    virtual bool isNonlinear() const { return false; }
     // Stamp the transient companion contributions for this element into `mna`
     // and `rhs`. Default implementation forwards to the DC `stamp` behavior so
     // existing elements compile.
