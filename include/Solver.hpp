@@ -91,3 +91,25 @@ enum class SolverDirectiveType
     OPERATING_POINT, /**< Operating point analysis */
     TRANSIENT        /**< Transient analysis */
 };
+
+/**
+ * @brief Run a transient (time-domain) simulation (skeleton).
+ *
+ * @param parser The parsed netlist and element list.
+ * @param nodeMap Graph of nodes created by `makeGraph`.
+ * @param indexMap Index map created by `makeIndexMap`.
+ * @param tFinal Final simulation time [s].
+ * @param h Time step [s].
+ * @return 0 on success, non-zero on error.
+ */
+int runTransient(Parser &parser,
+                 std::map<std::string, std::shared_ptr<Node>> &nodeMap,
+                 std::map<std::string, int> &indexMap, double tFinal, double h);
+
+Eigen::MatrixXd assembleMatrixOnly(
+    Parser &parser, std::map<std::string, std::shared_ptr<Node>> &nodeMap,
+    std::map<std::string, int> &indexMap, double h);
+
+Eigen::VectorXd computeOperatingPoint(
+    Parser &parser, std::map<std::string, std::shared_ptr<Node>> &nodeMap,
+    std::map<std::string, int> &indexMap);

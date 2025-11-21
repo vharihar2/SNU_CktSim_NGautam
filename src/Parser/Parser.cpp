@@ -122,6 +122,47 @@ int Parser::parse(const std::string& fileName, SolverDirectiveType& directive)
             }
             directive = SolverDirectiveType::OPERATING_POINT;
 
+        } else if (tokens[0].find(".TRAN") == 0) {
+            // Transient directive: .TRAN <Tstep> <Tstop>
+            if (directive != SolverDirectiveType::NONE) {
+                std::cerr << "Warning: Multiple directives found. Using the "
+                             "first one."
+                          << std::endl;
+                ++errorCount;
+            }
+            // Expect exactly 3 tokens: .TRAN Tstep Tstop
+            if (tokens.size() != 3) {
+                std::cerr << "Line " << lineNumber
+                          << ": .TRAN expects 2 arguments: <Tstep> <Tstop>"
+                          << std::endl;
+                ++errorCount;
+            } else {
+                bool validStep = false;
+                bool validStop = false;
+                double step = parseValue(tokens[1], lineNumber, validStep);
+                double stop = parseValue(tokens[2], lineNumber, validStop);
+                if (!validStep || !validStop) {
+                    std::cerr << "Line " << lineNumber
+                              << ": Invalid numeric argument in .TRAN directive"
+                              << std::endl;
+                    ++errorCount;
+                } else if (step <= 0.0 || stop <= 0.0) {
+                    std::cerr << "Line " << lineNumber
+                              << ": .TRAN arguments must be positive numbers"
+                              << std::endl;
+                    ++errorCount;
+                } else if (step > stop) {
+                    std::cerr << "Line " << lineNumber
+                              << ": .TRAN step must be <= stop time"
+                              << std::endl;
+                    ++errorCount;
+                } else {
+                    // Store parsed values in the parser instance
+                    this->tranStep = step;
+                    this->tranStop = stop;
+                    directive = SolverDirectiveType::TRANSIENT;
+                }
+            }
         } else {
             std::cerr << "Error: Unknown element at line " << lineNumber << ": "
                       << line << std::endl;
@@ -154,7 +195,8 @@ int Parser::parse(const std::string& fileName, SolverDirectiveType& directive)
     //                 elem->controlling_element->group != Group::G2) {
     //                 std::cerr << "Warning: Referenced element "
     //                           << elem->controlling_element->name
-    //                           << " must be in group 2 as its current variable
+    //                           << " must be in group 2 as its current
+    //                           variable
     //                           "
     //                              "is required by "
     //                           << elem->name << std::endl;
@@ -165,7 +207,8 @@ int Parser::parse(const std::string& fileName, SolverDirectiveType& directive)
     //             std::cerr << "Error: Referenced element "
     //                       << elem->controlling_element->name
     //                       << " (referenced by " << elem->name
-    //                       << ") is not present in the netlist" << std::endl;
+    //                       << ") is not present in the netlist" <<
+    //                       std::endl;
     //             errorCount++;
     //         }
     //     }
@@ -190,25 +233,28 @@ int Parser::parse(const std::string& fileName, SolverDirectiveType& directive)
 
 void Parser::printParser()
 {
-    // for (std::shared_ptr<CircuitElement> circuitElement : circuitElements)
+    // for (std::shared_ptr<CircuitElement> circuitElement :
+    // circuitElements)
     //     if (circuitElement->type == ElementType::V ||
     //         circuitElement->type == ElementType::I ||
     //         circuitElement->type == ElementType::R)
-    //         cout << circuitElement->name + " " + circuitElement->nodeA + " "
+    //         cout << circuitElement->name + " " + circuitElement->nodeA +
+    //         " "
     //         +
     //                     circuitElement->nodeB + " "
     //              << circuitElement->value << " " << circuitElement->group
     //              << endl;
     //     else
-    //         cout << circuitElement->name + " " + circuitElement->nodeA + " "
+    //         cout << circuitElement->name + " " + circuitElement->nodeA +
+    //         " "
     //         +
     //                     circuitElement->nodeB + " "
-    //              << circuitElement->value << " " << circuitElement->group <<
-    //              " "
+    //              << circuitElement->value << " " << circuitElement->group
+    //              << " "
     //              << circuitElement->controlling_variable << " "
     //              << circuitElement->controlling_element->name + " " +
-    //                     circuitElement->controlling_element->nodeA + " " +
-    //                     circuitElement->controlling_element->nodeB
+    //                     circuitElement->controlling_element->nodeA + " "
+    //                     + circuitElement->controlling_element->nodeB
     //              << endl;
 }
 bool Parser::validateTokens(const std::vector<std::string>& tokens,
@@ -272,7 +318,8 @@ double Parser::parseValue(const std::string& valueStr, int lineNumber,
 //     bool validValue = false;
 //     double value = parseValue(tokens[3], lineNumber, validValue);
 //     if (!validValue || value == 0) {
-//         std::cerr << "Error: Illegal argument for resistor value at line "
+//         std::cerr << "Error: Illegal argument for resistor value at line
+//         "
 //                   << lineNumber << std::endl;
 //         value = 1;  // Default to 1 ohm if invalid
 //     }
@@ -313,7 +360,8 @@ double Parser::parseValue(const std::string& valueStr, int lineNumber,
 //
 //     // Validate nodes
 //     if (!validateNodes(tokens[1], tokens[2], lineNumber)) {
-//         std::cerr << "Error: Voltage source nodes cannot be the same at line
+//         std::cerr << "Error: Voltage source nodes cannot be the same at
+//         line
 //         "
 //                   << lineNumber << std::endl;
 //         return;
@@ -363,7 +411,8 @@ double Parser::parseValue(const std::string& valueStr, int lineNumber,
 //     }
 //
 //     if (!validateNodes(tokens[1], tokens[2], lineNumber)) {
-//         std::cerr << "Error: Current source nodes cannot be the same at line
+//         std::cerr << "Error: Current source nodes cannot be the same at
+//         line
 //         "
 //                   << lineNumber << std::endl;
 //         return;
@@ -415,7 +464,8 @@ double Parser::parseValue(const std::string& valueStr, int lineNumber,
 //     bool validValue = false;
 //     double value = parseValue(tokens[3], lineNumber, validValue);
 //     if (!validValue || value == 0) {
-//         std::cerr << "Error: Illegal argument for capacitor value at line "
+//         std::cerr << "Error: Illegal argument for capacitor value at line
+//         "
 //                   << lineNumber << std::endl;
 //         value = 1;
 //     }
@@ -457,7 +507,8 @@ double Parser::parseValue(const std::string& valueStr, int lineNumber,
 //     bool validValue = false;
 //     double value = parseValue(tokens[3], lineNumber, validValue);
 //     if (!validValue || value == 0) {
-//         std::cerr << "Error: Illegal argument for inductor value at line "
+//         std::cerr << "Error: Illegal argument for inductor value at line
+//         "
 //                   << lineNumber << std::endl;
 //         value = 1;
 //     }
@@ -489,7 +540,8 @@ double Parser::parseValue(const std::string& valueStr, int lineNumber,
 //     // controlling_variable controlling_element
 //     if (!validateTokens(tokens, 6, lineNumber)) {
 //         std::cerr
-//             << "Error: Invalid dependent voltage source definition at line "
+//             << "Error: Invalid dependent voltage source definition at
+//             line "
 //             << lineNumber << std::endl;
 //         return;
 //     }
@@ -505,7 +557,8 @@ double Parser::parseValue(const std::string& valueStr, int lineNumber,
 //     bool validValue = false;
 //     double value = parseValue(tokens[3], lineNumber, validValue);
 //     if (!validValue || value == 0) {
-//         std::cerr << "Error: Illegal argument for dependent voltage source "
+//         std::cerr << "Error: Illegal argument for dependent voltage
+//         source "
 //                      "value at line "
 //                   << lineNumber << std::endl;
 //         value = 1;
@@ -525,7 +578,8 @@ double Parser::parseValue(const std::string& valueStr, int lineNumber,
 //     } else if (tokens[4] == "I") {
 //         temp->controlling_variable = ControlVariable::i;
 //     } else {
-//         std::cerr << "Error: Illegal controlling variable argument at line "
+//         std::cerr << "Error: Illegal controlling variable argument at
+//         line "
 //                   << lineNumber << std::endl;
 //         temp->controlling_variable = ControlVariable::none;
 //     }
@@ -559,7 +613,8 @@ double Parser::parseValue(const std::string& valueStr, int lineNumber,
 //     // controlling_variable controlling_element
 //     if (!validateTokens(tokens, 6, lineNumber)) {
 //         std::cerr
-//             << "Error: Invalid dependent current source definition at line "
+//             << "Error: Invalid dependent current source definition at
+//             line "
 //             << lineNumber << std::endl;
 //         return;
 //     }
@@ -575,7 +630,8 @@ double Parser::parseValue(const std::string& valueStr, int lineNumber,
 //     bool validValue = false;
 //     double value = parseValue(tokens[3], lineNumber, validValue);
 //     if (!validValue || value == 0) {
-//         std::cerr << "Error: Illegal argument for dependent current source "
+//         std::cerr << "Error: Illegal argument for dependent current
+//         source "
 //                      "value at line "
 //                   << lineNumber << std::endl;
 //         value = 1;
@@ -595,7 +651,8 @@ double Parser::parseValue(const std::string& valueStr, int lineNumber,
 //     } else if (tokens[4] == "I") {
 //         temp->controlling_variable = ControlVariable::i;
 //     } else {
-//         std::cerr << "Error: Illegal controlling variable argument at line "
+//         std::cerr << "Error: Illegal controlling variable argument at
+//         line "
 //                   << lineNumber << std::endl;
 //         temp->controlling_variable = ControlVariable::none;
 //     }

@@ -18,6 +18,18 @@
  */
 class Inductor : public CircuitElement
 {
+   private:
+    // --- Transient state (Trapezoidal companion model) ---
+    // Inductor current at previous timestep (i_n)
+    double i_prev = 0.0;
+    // Voltage across inductor at previous timestep (u_n) — optional but useful
+    double u_prev = 0.0;
+    // Companion model parameters for current time-step (computed by
+    // computeCompanion)
+    double Geq =
+        0.0;  // equivalent conductance = h/(2*L) (or as used in your stamping)
+    double Ieq = 0.0;  // equivalent current source
+
    public:
     /**
      * @brief Constructs an Inductor element.
@@ -51,4 +63,12 @@ class Inductor : public CircuitElement
      */
     static std::shared_ptr<CircuitElement> parse(
         Parser& parser, const std::vector<std::string>& tokens, int lineNumber);
+
+    void computeCompanion(double h) override;
+    void stampTransient(std::vector<std::vector<double>>& mna,
+                        std::vector<double>& rhs,
+                        std::map<std::string, int>& indexMap) override;
+    void updateStateFromSolution(
+        const Eigen::Ref<const Eigen::VectorXd>& x,
+        const std::map<std::string, int>& indexMap) override;
 };

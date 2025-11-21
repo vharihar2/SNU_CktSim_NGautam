@@ -75,5 +75,5 @@ class Node
      */
     void traverse(std::map<std::string, int> &indexMap,
                   std::vector<std::vector<double>> &mna,
-                  std::vector<double> &rhs);
+                  std::vector<double> &rhs, bool isTransient = false);
 };

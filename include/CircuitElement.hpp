@@ -36,6 +36,8 @@
 #include <string>
 #include <vector>
 
+#include "../lib/external/Eigen/Dense"
+
 // Forward Declaration
 class Parser;
 
@@ -223,6 +225,28 @@ class CircuitElement
                        std::vector<double>& rhs,
                        std::map<std::string, int>& indexMap) = 0;
 
+    // NOTE: --- Transient / time-domain hooks --
+    virtual void computeCompanion([[maybe_unused]] double h) {}
+    // Stamp the transient companion contributions for this element into `mna`
+    // and `rhs`. Default implementation forwards to the DC `stamp` behavior so
+    // existing elements compile.
+    virtual void stampTransient(std::vector<std::vector<double>>& mna,
+                                std::vector<double>& rhs,
+                                std::map<std::string, int>& indexMap)
+    {
+        // By default, use the DC stamp (useful until individual elements
+        // override this).
+        stamp(mna, rhs, indexMap);
+    }
+
+    // Update the element's internal state (e.g., capacitor voltage, inductor
+    // current) from the solved solution vector `x`. `indexMap` maps variable
+    // names to indices in `x`. Default: no-op.
+    virtual void updateStateFromSolution(
+        const Eigen::Ref<const Eigen::VectorXd>& x,
+        const std::map<std::string, int>& indexMap)
+    {
+    }
     /**
      * @brief Parses a circuit element from tokens
      * @param parser Reference to the parser

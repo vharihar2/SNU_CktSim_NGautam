@@ -117,8 +117,8 @@ class Parser
      * @return True if the number of tokens matches expectedSize, false
      * otherwise.
      */
-    bool validateTokens(const std::vector<std::string>& tokens, int lineNumber,
-                        int expectedSize);
+    bool validateTokens(const std::vector<std::string>& tokens,
+                        int expectedSize, int lineNumber);
 
     /**
      * @brief Parses a value string into a double.
@@ -149,6 +149,9 @@ class Parser
      * @brief Adds stability resistors to the circuit for numerical stability.
      */
     void addStabilityResistors();
+
+    double tranStep = 0.0;
+    double tranStop = 0.0;
 
    private:
     /**

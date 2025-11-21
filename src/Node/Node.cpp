@@ -30,7 +30,7 @@
 
 void Node::traverse(std::map<std::string, int> &indexMap,
                     std::vector<std::vector<double>> &mna,
-                    std::vector<double> &rhs)
+                    std::vector<double> &rhs, bool isTransient)
 {
     // Skip ground node and already processed nodes
     if (name == "0" || processed) return;
@@ -40,11 +40,15 @@ void Node::traverse(std::map<std::string, int> &indexMap,
     for (const auto &edge : edges) {
         if (edge->circuitElement->isProcessed()) continue;
         edge->circuitElement->setProcessed(true);
-        edge->circuitElement->stamp(mna, rhs, indexMap);
+        if (isTransient)
+            edge->circuitElement->stampTransient(mna, rhs, indexMap);
+        else {
+            edge->circuitElement->stamp(mna, rhs, indexMap);
+        }
     }
 
     // Recursively traverse connected nodes
     for (const auto &edge : edges) {
-        edge->target->traverse(indexMap, mna, rhs);
+        edge->target->traverse(indexMap, mna, rhs, isTransient);
     }
 }
