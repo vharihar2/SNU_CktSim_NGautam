@@ -180,18 +180,25 @@ static SingleStepResult computeSingleStep(
         double maxB = 0.0;
         try {
             if (A_k.size() > 0) maxA = A_k.cwiseAbs().maxCoeff();
-        } catch (...) { assemblyOk = false; }
+        } catch (...) {
+            assemblyOk = false;
+        }
         try {
             if (b.size() > 0) maxB = b.cwiseAbs().maxCoeff();
-        } catch (...) { assemblyOk = false; }
+        } catch (...) {
+            assemblyOk = false;
+        }
 
         if (!assemblyOk || !std::isfinite(maxA) || !std::isfinite(maxB) ||
             maxA > options.maxState * 1e6 || maxB > options.maxState * 1e6) {
             if (options.diagVerbose) {
                 std::ofstream diag(options.diagFile, std::ios::app);
                 if (diag) {
-                    diag << "computeSingleStep: rejecting iterate due to bad A/b assembly" << "\n";
-                    diag << "A_k.maxAbs=" << maxA << " b.maxAbs=" << maxB << "\n";
+                    diag << "computeSingleStep: rejecting iterate due to bad "
+                            "A/b assembly"
+                         << "\n";
+                    diag << "A_k.maxAbs=" << maxA << " b.maxAbs=" << maxB
+                         << "\n";
                 }
             }
             // treat as failed iterate so caller will reduce step
@@ -247,7 +254,8 @@ static SingleStepResult computeSingleStep(
         if (!xnewFinite) continue;
         // Early reject if linear solve produced an overly large candidate
         double maxAbsNew = 0.0;
-        for (int i = 0; i < n; ++i) maxAbsNew = std::max(maxAbsNew, std::abs(x_new[i]));
+        for (int i = 0; i < n; ++i)
+            maxAbsNew = std::max(maxAbsNew, std::abs(x_new[i]));
         if (maxAbsNew > options.maxState * 10.0) continue;
 
         double prevResidualNorm = std::numeric_limits<double>::infinity();
@@ -274,9 +282,13 @@ static SingleStepResult computeSingleStep(
             // to the previous iterate, treat it as non-finite and backtrack
             if (xrelFinite) {
                 double maxAbs = 0.0;
-                for (int i = 0; i < n; ++i) maxAbs = std::max(maxAbs, std::abs(x_relaxed_try[i]));
-                const double growthFactorLimit = 1e3; // permissive but protective
-                if (maxAbs > options.maxState * 10.0 || x_relaxed_try.norm() > growthFactorLimit * (1.0 + xk.norm())) {
+                for (int i = 0; i < n; ++i)
+                    maxAbs = std::max(maxAbs, std::abs(x_relaxed_try[i]));
+                const double growthFactorLimit =
+                    1e3;  // permissive but protective
+                if (maxAbs > options.maxState * 10.0 ||
+                    x_relaxed_try.norm() >
+                        growthFactorLimit * (1.0 + xk.norm())) {
                     xrelFinite = false;
                 }
             }
@@ -407,8 +419,8 @@ static SingleStepResult computeTwoHalfSteps(
     double h2 = h * 0.5;
 
     // First half-step (non-committing)
-    SingleStepResult s1 =
-        computeSingleStep(parser, nodeMap, indexMap, t_start, h2, x_start, options);
+    SingleStepResult s1 = computeSingleStep(parser, nodeMap, indexMap, t_start,
+                                            h2, x_start, options);
     if (!s1.success) {
         // restore and return failure
         Eigen::VectorXd tmp = cp.x0;
@@ -424,8 +436,8 @@ static SingleStepResult computeTwoHalfSteps(
     }
 
     // Second half-step starting at t_start + h/2 with initial guess s1.x
-    SingleStepResult s2 =
-        computeSingleStep(parser, nodeMap, indexMap, t_start + h2, h2, s1.x, options);
+    SingleStepResult s2 = computeSingleStep(parser, nodeMap, indexMap,
+                                            t_start + h2, h2, s1.x, options);
 
     // Restore original checkpoint (do not commit changes here)
     Eigen::VectorXd tmp = cp.x0;
@@ -744,7 +756,9 @@ int runTransient(Parser &parser,
     // - tolAbs: absolute tolerance on solution increment
     // - tolRel: relative tolerance on solution increment
     // - tolResidual: tolerance on linear residual ||A_k x - b||
-    const int maxNewtonIterations = options.maxNewtonIters;  // allow enough iterations for difficult nonlinearities
+    const int maxNewtonIterations =
+        options.maxNewtonIters;       // allow enough iterations for difficult
+                                      // nonlinearities
     const double tolAbs = 1e-9;       // absolute increment tolerance
     const double tolRel = 1e-6;       // relative increment tolerance
     const double tolResidual = 1e-8;  // residual tolerance (A x - b)
@@ -752,14 +766,18 @@ int runTransient(Parser &parser,
     const double newtonAlpha = options.newtonAlpha;  // sane default damping
 
     // Adaptive controller knobs (Phase A)
-    bool enableAdaptive = options.enableAdaptive; // opt-in: LTE step-doubling
-    double atol = options.atol;    // absolute tolerance for LTE
-    double rtol = options.rtol;    // relative tolerance for LTE
+    bool enableAdaptive = options.enableAdaptive;  // opt-in: LTE step-doubling
+    double atol = options.atol;                    // absolute tolerance for LTE
+    double rtol = options.rtol;                    // relative tolerance for LTE
     double safety = options.safety;   // safety factor for step-size controller
     double fac_min = options.facMin;  // minimum step-change factor
     double fac_max = options.facMax;  // maximum step-change factor
-    double h_min = (options.hMin > 0.0) ? options.hMin : (h / 1024.0);  // absolute minimum step
-    double h_max = (options.hMax > 0.0) ? options.hMax : h;           // maximum allowed step (initial h)
+    double h_min = (options.hMin > 0.0)
+                       ? options.hMin
+                       : (h / 1024.0);  // absolute minimum step
+    double h_max = (options.hMax > 0.0)
+                       ? options.hMax
+                       : h;  // maximum allowed step (initial h)
 
     // Prepare per-step containers
     std::vector<double> rhs_std(n, 0.0);
@@ -805,12 +823,17 @@ int runTransient(Parser &parser,
     double current_t = 0.0;
     int step = 0;
     const int maxAdaptiveRetries = options.maxAdaptiveRetries;
-    const double minH = (options.hMin > 0.0) ? options.hMin : (h / 1024.0);  // conservative lower bound for h
+    const double minH = (options.hMin > 0.0)
+                            ? options.hMin
+                            : (h / 1024.0);  // conservative lower bound for h
 
     // Adaptive timestep state: persist across steps
     double h_current = h;  // current working timestep (may be reduced)
-    const double growthFactor = 1.2;  // multiply h_current by this after enough successes
-    const int growthThreshold = options.growthSuccessCount;  // number of consecutive successes required to grow
+    const double growthFactor =
+        1.2;  // multiply h_current by this after enough successes
+    const int growthThreshold =
+        options.growthSuccessCount;  // number of consecutive successes required
+                                     // to grow
     int consecutiveSuccess = 0;
 
     // Failure handling policy: choose behavior when max retries are exhausted
@@ -891,7 +914,9 @@ int runTransient(Parser &parser,
                     }
                 }
                 if (fullTooLarge) {
-                    if (diag) diag << "computeSingleStep: full-step produced excessive state values; rejecting\n";
+                    if (diag)
+                        diag << "computeSingleStep: full-step produced "
+                                "excessive state values; rejecting\n";
                     continue;
                 }
 
@@ -919,7 +944,9 @@ int runTransient(Parser &parser,
                     }
                 }
                 if (halfTooLarge) {
-                    if (diag) diag << "computeTwoHalfSteps: half-step produced excessive state values; rejecting\n";
+                    if (diag)
+                        diag << "computeTwoHalfSteps: half-step produced "
+                                "excessive state values; rejecting\n";
                     continue;
                 }
 
@@ -1051,28 +1078,37 @@ int runTransient(Parser &parser,
                     // If LU reports non-invertible, try small diagonal
                     // regularization attempts before treating the iterate as
                     // failed.
-                        // Early sanity checks on assembled matrix/vector. If the
-                        // assembly produced non-finite or astronomically large
-                        // values, reject this iterate early so the adaptive
-                        // controller can reduce the timestep.
-                        {
-                            bool assemblyOk = true;
-                            double maxA = 0.0;
-                            double maxB = 0.0;
-                            try {
-                                if (A_k.size() > 0) maxA = A_k.cwiseAbs().maxCoeff();
-                            } catch (...) { assemblyOk = false; }
-                            try {
-                                if (b.size() > 0) maxB = b.cwiseAbs().maxCoeff();
-                            } catch (...) { assemblyOk = false; }
-                            if (!assemblyOk || !std::isfinite(maxA) || !std::isfinite(maxB) ||
-                                maxA > options.maxState * 1e6 || maxB > options.maxState * 1e6) {
-                                if (diag)
-                                    diag << "Newton: rejecting iterate due to bad A/b assembly (maxA=" << maxA << " maxB=" << maxB << ")\n";
-                                // treat as failed iterate
-                                continue;
-                            }
+                    // Early sanity checks on assembled matrix/vector. If the
+                    // assembly produced non-finite or astronomically large
+                    // values, reject this iterate early so the adaptive
+                    // controller can reduce the timestep.
+                    {
+                        bool assemblyOk = true;
+                        double maxA = 0.0;
+                        double maxB = 0.0;
+                        try {
+                            if (A_k.size() > 0)
+                                maxA = A_k.cwiseAbs().maxCoeff();
+                        } catch (...) {
+                            assemblyOk = false;
                         }
+                        try {
+                            if (b.size() > 0) maxB = b.cwiseAbs().maxCoeff();
+                        } catch (...) {
+                            assemblyOk = false;
+                        }
+                        if (!assemblyOk || !std::isfinite(maxA) ||
+                            !std::isfinite(maxB) ||
+                            maxA > options.maxState * 1e6 ||
+                            maxB > options.maxState * 1e6) {
+                            if (diag)
+                                diag << "Newton: rejecting iterate due to bad "
+                                        "A/b assembly (maxA="
+                                     << maxA << " maxB=" << maxB << ")\n";
+                            // treat as failed iterate
+                            continue;
+                        }
+                    }
                     Eigen::VectorXd x_new(n);
                     if (A_k.size() > 0) {
                         Eigen::FullPivLU<Eigen::MatrixXd> lu_k;
@@ -1160,7 +1196,8 @@ int runTransient(Parser &parser,
                                  << (iter + 1) << "\n";
                             if (options.diagVerbose) {
                                 for (auto &el : parser.circuitElements) {
-                                    if (el) el->dumpDiagnostics(diag, xk, indexMap);
+                                    if (el)
+                                        el->dumpDiagnostics(diag, xk, indexMap);
                                 }
                             }
                             double maxA = 0.0;
@@ -1208,11 +1245,16 @@ int runTransient(Parser &parser,
                         if (xrelFinite) {
                             double maxAbs = 0.0;
                             for (int i = 0; i < n; ++i)
-                                maxAbs = std::max(maxAbs, std::abs(x_relaxed_try[i]));
+                                maxAbs = std::max(maxAbs,
+                                                  std::abs(x_relaxed_try[i]));
                             const double growthFactorLimit = 1e3;
-                            if (maxAbs > options.maxState * 10.0 || x_relaxed_try.norm() > growthFactorLimit * (1.0 + xk.norm())) {
+                            if (maxAbs > options.maxState * 10.0 ||
+                                x_relaxed_try.norm() >
+                                    growthFactorLimit * (1.0 + xk.norm())) {
                                 if (diag)
-                                    diag << "Backtrack: rejecting wildly growing iterate (maxAbs=" << maxAbs << ")\n";
+                                    diag << "Backtrack: rejecting wildly "
+                                            "growing iterate (maxAbs="
+                                         << maxAbs << ")\n";
                                 xrelFinite = false;
                             }
                         }
@@ -1329,7 +1371,7 @@ int runTransient(Parser &parser,
                               << " iterations at t=" << t_local << std::endl;
                     // dump diagnostics for the failed timestep (last iterate
                     // xk)
-                        if (diag) {
+                    if (diag) {
                         diag << "Newton did not converge in "
                              << maxNewtonIterations << " iters at t=" << t_local
                              << "; dumping diagnostics...\n";
@@ -1365,8 +1407,9 @@ int runTransient(Parser &parser,
 
                 if (enableAdaptive) {
                     // Use current Newton solution `x` as the full-step result
-                    SingleStepResult halfRes = computeTwoHalfSteps(
-                        parser, nodeMap, indexMap, current_t, h_step, x0, options);
+                    SingleStepResult halfRes =
+                        computeTwoHalfSteps(parser, nodeMap, indexMap,
+                                            current_t, h_step, x0, options);
 
                     // Safety: reject half-step result if it produces
                     // excessively large state values

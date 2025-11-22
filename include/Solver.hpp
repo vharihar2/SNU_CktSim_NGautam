@@ -81,7 +81,8 @@ void printxX(std::map<std::string, int> &indexMap, Eigen::MatrixXd &X);
  * @param argv Array of command-line argument strings.
  * @return 0 if successful, else 1.
  */
-int runSolver(int argc, char *argv[], const SolverOptions &options = SolverOptions());
+int runSolver(int argc, char *argv[],
+              const SolverOptions &options = SolverOptions());
 /**
  * @enum SolverDirectiveType
  * @brief Specifies the type of simulation directive for the solver.

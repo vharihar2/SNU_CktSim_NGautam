@@ -205,6 +205,20 @@ void NonlinearInductor::dumpDiagnostics(
        << std::endl;
 }
 
+std::vector<double> NonlinearInductor::snapshotState() const
+{
+    return {i_prev_, u_prev_, phi_prev_};
+}
+
+void NonlinearInductor::restoreState(const std::vector<double> &data)
+{
+    if (data.size() >= 3) {
+        i_prev_ = data[0];
+        u_prev_ = data[1];
+        phi_prev_ = data[2];
+    }
+}
+
 // DC stamp for inductor: create branch-current unknown and node-branch
 // coupling entries following the linear Inductor::stamp pattern so the DC
 // operating point provides a valid i_prev and u_prev for the nonlinear model.
