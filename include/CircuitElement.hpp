@@ -264,6 +264,14 @@ class CircuitElement
         const std::map<std::string, int>& indexMap)
     {
     }
+
+    // Diagnostic hook: elements can emit a compact diagnostic snapshot for a
+    // given solver iterate `xk`. Default implementation is a no-op.
+    virtual void dumpDiagnostics(
+        std::ostream& /*os*/, const Eigen::Ref<const Eigen::VectorXd>& /*xk*/,
+        const std::map<std::string, int>& /*indexMap*/) const
+    {
+    }
     /**
      * @brief Parses a circuit element from tokens
      * @param parser Reference to the parser

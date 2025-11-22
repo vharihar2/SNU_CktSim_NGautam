@@ -19,57 +19,95 @@ void NonlinearCapacitor::computeCompanionIter(
     const std::map<std::string, int> &indexMap)
 {
     // Determine node voltages for this element from the current Newton iterate
-    // xk
-    const int idxPlus = indexMap.at(nodeA);
-    const int idxMinus = indexMap.at(nodeB);
+    // xk. Handle ground ('0') which is not present in indexMap.
+    auto findIndex = [&](const std::string &n) -> int {
+        if (n == "0") return -1;
+        auto it = indexMap.find(n);
+        return (it == indexMap.end()) ? -1 : it->second;
+    };
 
-    const double vPlus = xk[idxPlus];
-    const double vMinus = xk[idxMinus];
+    const int idxPlus = findIndex(nodeA);
+    const int idxMinus = findIndex(nodeB);
+
+    const double vPlus = (idxPlus >= 0) ? xk[idxPlus] : 0.0;
+    const double vMinus = (idxMinus >= 0) ? xk[idxMinus] : 0.0;
     const double u_k = vPlus - vMinus;  // voltage across capacitor at iterate
 
     // model evaluations at u_k
     const double qk = model_->q(u_k);
-    const double dqdu_k = model_->dqdu(u_k);
+    double dqdu_k = model_->dqdu(u_k);
 
-    // TR Norton-equivalent linearization
-    Geq_ = (2.0 / h) * dqdu_k;
+    // Safety: clamp derivative to avoid divide-by-zero / extreme Geq values
+    const double minDeriv = 1e-12;
+    if (std::abs(dqdu_k) < minDeriv)
+        dqdu_k = (dqdu_k >= 0.0) ? minDeriv : -minDeriv;
 
-    // Ieq derived from TR companion for charge-based device:
-    // discrete TR: q_{n+1} = q_n + (h/2) * (i_n + i_{n+1})
-    // rearranged to Norton form yields the expression below. Equivalent
-    // form used in repository: Ieq = Geq * u_k - (2/h)*(qk - q_prev_) - i_prev_
-    Ieq_ = Geq_ * u_k - (2.0 / h) * (qk - q_prev_) - i_prev_;
+    // compute candidates in temporaries and validate before assigning
+    double Geq_temp = (2.0 / h) * dqdu_k;
+    double Ieq_temp = Geq_temp * u_k - (2.0 / h) * (qk - q_prev_) - i_prev_;
+
+    // Cap magnitudes to avoid ill-conditioned entries
+    const double maxGeq = 1e12;
+    if (!std::isfinite(Geq_temp) || std::abs(Geq_temp) > maxGeq) {
+        // invalid or too large -> keep previous Geq/Ieq (safer) and return
+        return;
+    }
+
+    if (!std::isfinite(Ieq_temp)) {
+        return;
+    }
+
+    // Accept computed companion values
+    Geq_ = Geq_temp;
+    Ieq_ = Ieq_temp;
 }
 
 void NonlinearCapacitor::stampTransient(std::vector<std::vector<double>> &mna,
                                         std::vector<double> &rhs,
                                         std::map<std::string, int> &indexMap)
 {
-    // stamp Geq between nodeA/nodeB and place Ieq into rhs with repository sign
-    // conv
-    const int p = indexMap.at(nodeA);
-    const int n = indexMap.at(nodeB);
+    // stamp Geq between nodeA/nodeB and place Ieq into rhs with repository
+    // sign convention. Handle ground (node '0') which is not present in
+    // indexMap.
+    auto itP = indexMap.find(nodeA);
+    auto itN = indexMap.find(nodeB);
+    int p = (itP == indexMap.end()) ? -1 : itP->second;
+    int n = (itN == indexMap.end()) ? -1 : itN->second;
 
-    // ensure matrix is large enough
-    mna[p][p] += Geq_;
-    mna[n][n] += Geq_;
-    mna[p][n] -= Geq_;
-    mna[n][p] -= Geq_;
+    // stamp entries depending on presence of nodes
+    if (p >= 0 && n >= 0) {
+        mna[p][p] += Geq_;
+        mna[n][n] += Geq_;
+        mna[p][n] -= Geq_;
+        mna[n][p] -= Geq_;
 
-    // rhs: subtract Ieq at p, add Ieq at n (convention: positive current from
-    // p->n)
-    rhs[p] -= Ieq_;
-    rhs[n] += Ieq_;
+        rhs[p] -= Ieq_;
+        rhs[n] += Ieq_;
+    } else if (p >= 0 && n < 0) {
+        // minus node is ground
+        mna[p][p] += Geq_;
+        rhs[p] -= Ieq_;
+        // ground node implicit: no matrix entry
+    } else if (p < 0 && n >= 0) {
+        // plus node is ground
+        mna[n][n] += Geq_;
+        rhs[n] += Ieq_;
+    } else {
+        // both nodes are ground? degenerate, nothing to stamp
+    }
 }
 
 void NonlinearCapacitor::updateStateFromSolution(
     const Eigen::Ref<const Eigen::VectorXd> &x,
     const std::map<std::string, int> &indexMap)
 {
-    const int p = indexMap.at(nodeA);
-    const int n = indexMap.at(nodeB);
-    const double vPlus = x[p];
-    const double vMinus = x[n];
+    // Handle ground nodes which may not be present in indexMap
+    auto itP = indexMap.find(nodeA);
+    auto itN = indexMap.find(nodeB);
+    int p = (itP == indexMap.end()) ? -1 : itP->second;
+    int n = (itN == indexMap.end()) ? -1 : itN->second;
+    const double vPlus = (p >= 0) ? x[p] : 0.0;
+    const double vMinus = (n >= 0) ? x[n] : 0.0;
 
     const double u_new = vPlus - vMinus;
 
@@ -86,4 +124,28 @@ void NonlinearCapacitor::updateStateFromSolution(
     } else {
         i_prev_ = Geq_ * u_new - Ieq_;
     }
+}
+
+void NonlinearCapacitor::dumpDiagnostics(
+    std::ostream &os, const Eigen::Ref<const Eigen::VectorXd> &xk,
+    const std::map<std::string, int> &indexMap) const
+{
+    auto idx = [&](const std::string &node) -> int {
+        if (node == "0") return -1;
+        auto it = indexMap.find(node);
+        return (it == indexMap.end()) ? -1 : it->second;
+    };
+
+    int p = idx(nodeA);
+    int n = idx(nodeB);
+    double vplus = (p == -1) ? 0.0 : xk[p];
+    double vminus = (n == -1) ? 0.0 : xk[n];
+    double u_k = vplus - vminus;
+    double q_k = model_->q(u_k);
+    double dqdu_k = model_->dqdu(u_k);
+
+    os << "CAP " << name << " (" << nodeA << "," << nodeB
+       << ") t-voltage=" << u_k << " q=" << q_k << " dqdu=" << dqdu_k
+       << " Geq=" << Geq_ << " Ieq=" << Ieq_ << " u_prev=" << u_prev_
+       << " q_prev=" << q_prev_ << " i_prev=" << i_prev_ << std::endl;
 }

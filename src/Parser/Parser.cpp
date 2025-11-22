@@ -63,20 +63,57 @@ int Parser::parse(const std::string& fileName, SolverDirectiveType& directive)
     nodes_group2.clear();
     elementMap.clear();
 
+    // Helper tokenizer: splits on whitespace but keeps parenthesized groups
+    auto tokenizeLine = [](const std::string& ln) {
+        std::vector<std::string> tokens;
+        std::string cur;
+        bool inParen = false;
+        int parenDepth = 0;
+        for (size_t i = 0; i < ln.size(); ++i) {
+            char c = ln[i];
+            // If start of comment outside parentheses, stop tokenizing
+            if (!inParen && (c == '*' || c == ';')) break;
+            if (std::isspace((unsigned char)c) && !inParen) {
+                if (!cur.empty()) {
+                    tokens.push_back(cur);
+                    cur.clear();
+                }
+                continue;
+            }
+            cur.push_back(c);
+            if (c == '(') {
+                inParen = true;
+                ++parenDepth;
+            } else if (c == ')' && inParen) {
+                if (--parenDepth == 0) inParen = false;
+            }
+        }
+        if (!cur.empty()) tokens.push_back(cur);
+        return tokens;
+    };
+
     while (std::getline(fileStream, line)) {
         lineNumber++;
 
-        // Convert line to uppercase for uniformity
-        std::transform(line.begin(), line.end(), line.begin(), ::toupper);
+        // Skip empty or comment-only lines quickly by checking first non-space
+        size_t firstChar = line.find_first_not_of(" \t\r\n");
+        if (firstChar == std::string::npos) continue;  // blank line
+        char fc = line[firstChar];
+        if (fc == '*' || fc == ';') continue;  // comment line
 
-        // Tokenize line
-        std::stringstream ss(line);
-        std::vector<std::string> tokens;
-        std::string buf;
-        while (ss >> buf) tokens.push_back(buf);
+        // Convert line to uppercase for uniformity (keeps punctuation like ()
+        // unchanged)
+        std::string up = line;
+        std::transform(up.begin(), up.end(), up.begin(), ::toupper);
 
-        // Skip empty lines and comments
-        if (tokens.empty() || tokens[0].find("%") == 0) continue;
+        // Tokenize line using the tokenizer that preserves (...) groups
+        std::vector<std::string> tokens = tokenizeLine(up);
+
+        // Skip empty token lines
+        if (tokens.empty()) continue;
+
+        // Handle explicit end directive
+        if (tokens[0].find(".END") == 0) break;
 
         std::shared_ptr<CircuitElement> element = nullptr;
         // Dispatch to element-specific parse functions

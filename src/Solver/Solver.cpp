@@ -243,6 +243,7 @@ Eigen::VectorXd computeOperatingPoint(
     }
 
     // Initialize element internal states from DC solution
+
     for (auto &el : parser.circuitElements) {
         if (el) el->updateStateFromSolution(X, indexMap);
     }
@@ -281,6 +282,8 @@ int runTransient(Parser &parser,
     const double tolAbs = 1e-9;       // absolute increment tolerance
     const double tolRel = 1e-6;       // relative increment tolerance
     const double tolResidual = 1e-8;  // residual tolerance (A x - b)
+    // Under-relaxation factor for Newton updates (1.0 = no relaxation)
+    const double newtonAlpha = 0.7;  // sane default damping
 
     // Prepare per-step containers
     std::vector<double> rhs_std(n, 0.0);
@@ -326,6 +329,15 @@ int runTransient(Parser &parser,
     for (int step = 0; step < steps; ++step) {
         double t = (step + 1) * h;  // time at end of step (t_{n+1})
 
+        // diagnostics file (append) opened per-step to ensure flushed records
+        std::ofstream diag("diagnostics.log", std::ios::app);
+        if (diag) {
+            diag.setf(std::ios::fixed);
+            diag << std::setprecision(8);
+            diag << "--- Diagnostic snapshot: step=" << (step + 1) << " t=" << t
+                 << " ---\n";
+        }
+
         // Newton iterations per time-step (TR-only). Start with previous
         // timestep solution as initial guess.
         Eigen::VectorXd xk = x0;  // initial guess: last converged solution
@@ -367,25 +379,193 @@ int runTransient(Parser &parser,
 
             b = Eigen::Map<Eigen::VectorXd>(rhs_std.data(), n);
 
-            // 3) Solve A_k * x_new = b
+            // 3) Solve A_k * x_new = b with LU/solve guards.
+            // If LU reports non-invertible, try small diagonal regularization
+            // attempts before treating the iterate as failed.
             Eigen::VectorXd x_new(n);
             if (A_k.size() > 0) {
-                Eigen::PartialPivLU<Eigen::MatrixXd> lu_k;
+                Eigen::FullPivLU<Eigen::MatrixXd> lu_k;
                 lu_k.compute(A_k);
-                x_new = lu_k.solve(b);
+
+                if (!lu_k.isInvertible()) {
+                    if (diag)
+                        diag << "LU not invertible at iter=" << (iter + 1)
+                             << "; attempting regularization\n";
+                    // Try a few regularization magnitudes (non-accumulating)
+                    const double regs[3] = {1e-12, 1e-9, 1e-6};
+                    bool solved = false;
+                    for (double rv : regs) {
+                        Eigen::MatrixXd A_reg = A_k;
+                        for (int d = 0; d < n; ++d) A_reg(d, d) += rv;
+                        lu_k.compute(A_reg);
+                        if (lu_k.isInvertible()) {
+                            x_new = lu_k.solve(b);
+                            // if solve produced finite results, accept
+                            bool ok = true;
+                            for (int i = 0; i < n; ++i)
+                                if (!std::isfinite(x_new[i])) {
+                                    ok = false;
+                                    break;
+                                }
+                            if (ok) {
+                                solved = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!solved) {
+                        if (diag) {
+                            diag << "LU/regularization failed at iter="
+                                 << (iter + 1) << "\n";
+                            double maxA = 0.0;
+                            try {
+                                if (A_k.size() > 0)
+                                    maxA = A_k.cwiseAbs().maxCoeff();
+                            } catch (...) {
+                            }
+                            double maxB = 0.0;
+                            try {
+                                if (b.size() > 0)
+                                    maxB = b.cwiseAbs().maxCoeff();
+                            } catch (...) {
+                            }
+                            diag << "A_k.maxAbs=" << maxA
+                                 << " b.maxAbs=" << maxB << "\n";
+                        }
+                        // Treat this linear solve as failed: leave xk unchanged
+                        // and continue iterating
+                        continue;
+                    }
+                } else {
+                    x_new = lu_k.solve(b);
+                }
             } else {
                 x_new.setZero();
             }
 
-            // 4) Compute delta and residual norms for convergence tests
-            Eigen::VectorXd delta = x_new - xk;
-            double deltaNorm = delta.norm();
-            double relTol = tolRel * (1.0 + x_new.norm());
+            // 4) Apply under-relaxation with simple backtracking line-search.
+            // Try several alpha values (newtonAlpha, newtonAlpha/2, ...) and
+            // pick the relaxed iterate that yields the smallest finite
+            // residual.
+            double relTol = tolRel * (1.0 + xk.norm());
 
-            // residual r = A_k * x_new - b
+            bool xnewFinite = true;
+            for (int i = 0; i < n; ++i) {
+                if (!std::isfinite(x_new[i])) {
+                    xnewFinite = false;
+                    break;
+                }
+            }
+            if (!xnewFinite) {
+                std::cerr << "Warning: Non-finite values produced by linear "
+                             "solve at t="
+                          << t << ". Treating iterate as failed." << std::endl;
+                if (diag) {
+                    diag << "Non-finite x_new produced at iter=" << (iter + 1)
+                         << "\n";
+                    for (auto &el : parser.circuitElements) {
+                        if (el) el->dumpDiagnostics(diag, xk, indexMap);
+                    }
+                    double maxA = 0.0;
+                    if (A_k.size() > 0) maxA = A_k.cwiseAbs().maxCoeff();
+                    double maxB = 0.0;
+                    if (b.size() > 0) maxB = b.cwiseAbs().maxCoeff();
+                    diag << "A_k.maxAbs=" << maxA << " b.maxAbs=" << maxB
+                         << "\n";
+                }
+                // Do not accept x_new; leave xk unchanged and continue
+                // iterating.
+                continue;
+            }
+
+            // Precompute residual at current xk for comparison
+            double prevResidualNorm = std::numeric_limits<double>::infinity();
+            if (A_k.size() > 0) {
+                Eigen::VectorXd r_k = A_k * xk - b;
+                prevResidualNorm = r_k.norm();
+            }
+
+            const int maxBacktracks = 4;
+            double bestResidual = std::numeric_limits<double>::infinity();
+            Eigen::VectorXd best_x_relaxed = xk;
+            double tryAlpha = newtonAlpha;
+            bool foundFinite = false;
+
+            for (int bt = 0; bt <= maxBacktracks; ++bt) {
+                Eigen::VectorXd x_relaxed_try = xk + tryAlpha * (x_new - xk);
+
+                bool xrelFinite = true;
+                for (int i = 0; i < n; ++i) {
+                    if (!std::isfinite(x_relaxed_try[i])) {
+                        xrelFinite = false;
+                        break;
+                    }
+                }
+                if (!xrelFinite) {
+                    if (diag)
+                        diag << "Backtrack bt=" << bt << " alpha=" << tryAlpha
+                             << " produced non-finite relaxed iterate\n";
+                    tryAlpha *= 0.5;
+                    continue;
+                }
+
+                double residualNorm = std::numeric_limits<double>::infinity();
+                if (A_k.size() > 0) {
+                    Eigen::VectorXd r = A_k * x_relaxed_try - b;
+                    residualNorm = r.norm();
+                }
+
+                if (!std::isfinite(residualNorm)) {
+                    if (diag)
+                        diag << "Backtrack bt=" << bt << " alpha=" << tryAlpha
+                             << " produced non-finite residual\n";
+                    tryAlpha *= 0.5;
+                    continue;
+                }
+
+                // Record the best finite residual
+                if (residualNorm < bestResidual) {
+                    bestResidual = residualNorm;
+                    best_x_relaxed = x_relaxed_try;
+                }
+                foundFinite = true;
+
+                // Prefer an alpha that reduces residual compared to previous
+                // iterate
+                if (std::isfinite(prevResidualNorm) &&
+                    residualNorm <= prevResidualNorm) {
+                    if (diag)
+                        diag << "Backtrack: accepted alpha=" << tryAlpha
+                             << " residual=" << residualNorm
+                             << " prevResidual=" << prevResidualNorm << "\n";
+                    break;
+                }
+
+                // otherwise reduce alpha and try again
+                tryAlpha *= 0.5;
+            }
+
+            if (!foundFinite) {
+                std::cerr << "Warning: Non-finite values after "
+                             "relaxation/backtracking at t="
+                          << t << ". Treating iterate as failed." << std::endl;
+                if (diag) {
+                    diag << "Non-finite x_relaxed produced after backtracking "
+                            "at iter="
+                         << (iter + 1) << "\n";
+                }
+                continue;
+            }
+
+            Eigen::VectorXd x_relaxed = best_x_relaxed;
+
+            Eigen::VectorXd delta = x_relaxed - xk;
+            double deltaNorm = delta.norm();
+
+            // residual r = A_k * x_relaxed - b
             double residualNorm = 0.0;
             if (A_k.size() > 0) {
-                Eigen::VectorXd r = A_k * x_new - b;
+                Eigen::VectorXd r = A_k * x_relaxed - b;
                 residualNorm = r.norm();
             }
 
@@ -398,26 +578,52 @@ int runTransient(Parser &parser,
             }
 
             // Convergence if either increment or residual tolerance met
-            if (deltaNorm <= tolAbs || deltaNorm <= relTol ||
-                residualNorm <= tolResidual) {
-                x = x_new;
+            // Require finite norms before accepting convergence to avoid
+            // accepting invalid iterates that contain Inf/NaN.
+            if (std::isfinite(deltaNorm) && std::isfinite(residualNorm) &&
+                (deltaNorm <= tolAbs || deltaNorm <= relTol ||
+                 residualNorm <= tolResidual)) {
+                x = x_relaxed;
                 converged = true;
                 if (step < 5 || step == steps - 1) {
                     std::cout << "  Converged at iter " << (iter + 1)
                               << " deltaNorm=" << deltaNorm
-                              << " residualNorm=" << residualNorm << std::endl;
+                              << " residualNorm=" << residualNorm
+                              << " alpha=" << newtonAlpha << std::endl;
                 }
                 break;
             }
 
-            // 5) prepare next iterate
-            xk = x_new;
+            // 5) prepare next iterate (accept relaxed update)
+            xk = x_relaxed;
         }
 
         if (!converged) {
             std::cerr << "Warning: Newton did not converge in "
                       << maxNewtonIterations << " iterations at t=" << t
                       << std::endl;
+            // dump diagnostics for the failed timestep (last iterate xk)
+            if (diag) {
+                diag << "Newton did not converge in " << maxNewtonIterations
+                     << " iters at t=" << t << "; dumping diagnostics...\n";
+                for (auto &el : parser.circuitElements) {
+                    if (el) el->dumpDiagnostics(diag, xk, indexMap);
+                }
+
+                // compute compact A_k/b snapshot for last assembly
+                // Re-assemble a compact A_k/b for the last xk iterate to show
+                // matrix magnitudes (do a quick assemble using
+                // assembleMatrixOnly)
+                try {
+                    Eigen::MatrixXd A_snap =
+                        assembleMatrixOnly(parser, nodeMap, indexMap, h);
+                    double maxA = 0.0;
+                    if (A_snap.size() > 0) maxA = A_snap.cwiseAbs().maxCoeff();
+                    diag << "A_snapshot.maxAbs=" << maxA << "\n";
+                } catch (...) {
+                    diag << "A_snapshot assembly failed" << "\n";
+                }
+            }
             // Accept last iterate
             x = xk;
         }

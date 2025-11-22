@@ -54,6 +54,11 @@ class NonlinearCapacitor : public CircuitElement
         const Eigen::Ref<const Eigen::VectorXd> &x,
         const std::map<std::string, int> &indexMap) override;
 
+    // Diagnostics dump for solver debugging
+    void dumpDiagnostics(
+        std::ostream &os, const Eigen::Ref<const Eigen::VectorXd> &xk,
+        const std::map<std::string, int> &indexMap) const override;
+
    private:
     std::shared_ptr<NonlinearModel> model_;
 
