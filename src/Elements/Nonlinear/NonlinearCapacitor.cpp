@@ -39,8 +39,15 @@ void NonlinearCapacitor::computeCompanionIter(
 
     // Safety: clamp derivative to avoid divide-by-zero / extreme Geq values
     const double minDeriv = 1e-12;
+    const double maxDeriv = 1e12;
+    if (!std::isfinite(qk) || !std::isfinite(dqdu_k)) {
+        // invalid model evaluation; bail out so caller can backtrack
+        return;
+    }
     if (std::abs(dqdu_k) < minDeriv)
         dqdu_k = (dqdu_k >= 0.0) ? minDeriv : -minDeriv;
+    if (std::abs(dqdu_k) > maxDeriv)
+        dqdu_k = (dqdu_k > 0.0) ? maxDeriv : -maxDeriv;
 
     // compute candidates in temporaries and validate before assigning
     double Geq_temp = (2.0 / h) * dqdu_k;
@@ -53,7 +60,7 @@ void NonlinearCapacitor::computeCompanionIter(
         return;
     }
 
-    if (!std::isfinite(Ieq_temp)) {
+    if (!std::isfinite(Ieq_temp) || std::abs(Ieq_temp) > 1e300) {
         return;
     }
 
@@ -148,4 +155,19 @@ void NonlinearCapacitor::dumpDiagnostics(
        << ") t-voltage=" << u_k << " q=" << q_k << " dqdu=" << dqdu_k
        << " Geq=" << Geq_ << " Ieq=" << Ieq_ << " u_prev=" << u_prev_
        << " q_prev=" << q_prev_ << " i_prev=" << i_prev_ << std::endl;
+}
+
+std::vector<double> NonlinearCapacitor::snapshotState() const
+{
+    // store minimal internal scalars required to restore transient state
+    return {u_prev_, i_prev_, q_prev_};
+}
+
+void NonlinearCapacitor::restoreState(const std::vector<double> &data)
+{
+    if (data.size() >= 3) {
+        u_prev_ = data[0];
+        i_prev_ = data[1];
+        q_prev_ = data[2];
+    }
 }

@@ -59,6 +59,10 @@ class NonlinearCapacitor : public CircuitElement
         std::ostream &os, const Eigen::Ref<const Eigen::VectorXd> &xk,
         const std::map<std::string, int> &indexMap) const override;
 
+    // Checkpoint/restore
+    std::vector<double> snapshotState() const override;
+    void restoreState(const std::vector<double> &data) override;
+
    private:
     std::shared_ptr<NonlinearModel> model_;
 

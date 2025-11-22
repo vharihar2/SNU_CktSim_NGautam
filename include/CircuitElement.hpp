@@ -272,6 +272,14 @@ class CircuitElement
         const std::map<std::string, int>& /*indexMap*/) const
     {
     }
+
+    // --- Checkpoint / restore API ---
+    // Elements should return a compact vector of doubles that represent the
+    // minimal internal state required to restore the element to a previous
+    // timestep. The solver will call `snapshotState()` before a step and
+    // `restoreState()` if the step needs to be retried.
+    virtual std::vector<double> snapshotState() const { return {}; }
+    virtual void restoreState(const std::vector<double>& /*data*/) {}
     /**
      * @brief Parses a circuit element from tokens
      * @param parser Reference to the parser

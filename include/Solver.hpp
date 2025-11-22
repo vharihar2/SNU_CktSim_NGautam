@@ -25,6 +25,7 @@
 #include "../lib/external/Eigen/Dense"
 #include "Node.hpp"
 #include "Parser.hpp"
+#include "SolverOptions.hpp"
 
 /*
  * @file Solver.hpp
@@ -80,7 +81,7 @@ void printxX(std::map<std::string, int> &indexMap, Eigen::MatrixXd &X);
  * @param argv Array of command-line argument strings.
  * @return 0 if successful, else 1.
  */
-int runSolver(int argc, char *argv[]);
+int runSolver(int argc, char *argv[], const SolverOptions &options = SolverOptions());
 /**
  * @enum SolverDirectiveType
  * @brief Specifies the type of simulation directive for the solver.
@@ -104,7 +105,8 @@ enum class SolverDirectiveType
  */
 int runTransient(Parser &parser,
                  std::map<std::string, std::shared_ptr<Node>> &nodeMap,
-                 std::map<std::string, int> &indexMap, double tFinal, double h);
+                 std::map<std::string, int> &indexMap, double tFinal, double h,
+                 const SolverOptions &options = SolverOptions());
 
 Eigen::MatrixXd assembleMatrixOnly(
     Parser &parser, std::map<std::string, std::shared_ptr<Node>> &nodeMap,

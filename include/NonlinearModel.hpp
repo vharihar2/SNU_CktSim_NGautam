@@ -46,23 +46,73 @@ class PolynomialChargeModel : public NonlinearModel
 
     double q(double u) const override
     {
+        // Horner's method is numerically more stable and avoids
+        // repeated pow() growth which can overflow quickly for large u.
+        // Also clamp outputs to avoid producing Inf/NaN that destabilize
+        // the solver. Use a very large but finite clamp bound.
+        // Reduce clamp to a more conservative magnitude and avoid
+        // intermediate overflow by checking before multiplication.
+        const double MAX_POLY_OUT = 1e30;
         double res = 0.0;
-        double pow_u = 1.0;
-        for (double a : m_coeffs) {
-            res += a * pow_u;
-            pow_u *= u;
+        for (auto it = m_coeffs.rbegin(); it != m_coeffs.rend(); ++it) {
+            // Prevent intermediate overflow: if |res| * |u| would exceed
+            // MAX_POLY_OUT, clamp and stop.
+            double abs_u = std::abs(u);
+            double safe_limit = MAX_POLY_OUT / std::max(1.0, abs_u);
+            if (std::abs(res) > safe_limit) {
+                res = (res > 0.0) ? MAX_POLY_OUT : -MAX_POLY_OUT;
+                break;
+            }
+            double next = res * u + *it;
+            if (!std::isfinite(next)) {
+                // clamp to finite sentinel and break
+                res = (next > 0.0) ? MAX_POLY_OUT : -MAX_POLY_OUT;
+                break;
+            }
+            if (std::abs(next) > MAX_POLY_OUT) {
+                res = (next > 0.0) ? MAX_POLY_OUT : -MAX_POLY_OUT;
+                break;
+            }
+            res = next;
+        }
+        if (!std::isfinite(res)) {
+            // Return a large finite sentinel value instead of Inf/NaN
+            return (res > 0.0) ? MAX_POLY_OUT : -MAX_POLY_OUT;
         }
         return res;
     }
 
     double dqdu(double u) const override
     {
-        // derivative: sum_{k>=1} k * a_k * u^{k-1}
+        // Compute derivative using Horner-like evaluation for the
+        // polynomial derivative: d/du (a0 + a1 u + a2 u^2 + ...) =
+        // a1 + 2*a2*u + 3*a3*u^2 + ...
+        const double MAX_POLY_OUT = 1e30;
         double res = 0.0;
-        double pow_u = 1.0;  // u^{k-1}
-        for (size_t k = 1; k < m_coeffs.size(); ++k) {
-            res += static_cast<double>(k) * m_coeffs[k] * pow_u;
-            pow_u *= u;
+        if (m_coeffs.size() <= 1) return 0.0;
+        // Evaluate derivative via Horner-like accumulation from highest
+        // degree down to 1. Use safe multiply checks to avoid overflow.
+        for (int kk = static_cast<int>(m_coeffs.size()) - 1; kk >= 1; --kk) {
+            double coeff = static_cast<double>(kk) * m_coeffs[kk];
+            double abs_u = std::abs(u);
+            double safe_limit = MAX_POLY_OUT / std::max(1.0, abs_u);
+            if (std::abs(res) > safe_limit) {
+                res = (res > 0.0) ? MAX_POLY_OUT : -MAX_POLY_OUT;
+                break;
+            }
+            double next = res * u + coeff;
+            if (!std::isfinite(next)) {
+                res = (next > 0.0) ? MAX_POLY_OUT : -MAX_POLY_OUT;
+                break;
+            }
+            if (std::abs(next) > MAX_POLY_OUT) {
+                res = (next > 0.0) ? MAX_POLY_OUT : -MAX_POLY_OUT;
+                break;
+            }
+            res = next;
+        }
+        if (!std::isfinite(res)) {
+            return (res > 0.0) ? MAX_POLY_OUT : -MAX_POLY_OUT;
         }
         return res;
     }
