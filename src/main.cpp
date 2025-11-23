@@ -36,23 +36,6 @@ static void printHelp(const char *prog)
 {
     std::cout << "Usage: " << prog << " [options] [netlist-file]\n";
     std::cout << "Options:\n";
-    std::cout
-        << "  --adaptive                Enable adaptive timestep controller\n";
-    std::cout << "  --atol <double>           Absolute tolerance for LTE "
-                 "(default 1e-6)\n";
-    std::cout << "  --rtol <double>           Relative tolerance for LTE "
-                 "(default 1e-3)\n";
-    std::cout << "  --safety <double>         Safety factor (default 0.9)\n";
-    std::cout << "  --fac-min <double>        Minimum step-change factor "
-                 "(default 0.5)\n";
-    std::cout << "  --fac-max <double>        Maximum step-change factor "
-                 "(default 2.0)\n";
-    std::cout << "  --h-min <double>          Minimum timestep (overrides "
-                 "internal default)\n";
-    std::cout << "  --h-max <double>          Maximum timestep (overrides "
-                 "internal default)\n";
-    std::cout
-        << "  --adaptive-max-retries <int>  Max adaptive retries (default 4)\n";
     std::cout << "  --newton-alpha <double>   Newton under-relaxation alpha "
                  "(default 1.0)\n";
     std::cout << "  --max-newton-iters <int>  Max Newton iterations per step "
@@ -70,15 +53,6 @@ int main(int argc, char *argv[])
     SolverOptions options;
 
     static struct option long_options[] = {
-        {"adaptive", no_argument, 0, 'a'},
-        {"atol", required_argument, 0, 0},
-        {"rtol", required_argument, 0, 0},
-        {"safety", required_argument, 0, 0},
-        {"fac-min", required_argument, 0, 0},
-        {"fac-max", required_argument, 0, 0},
-        {"h-min", required_argument, 0, 0},
-        {"h-max", required_argument, 0, 0},
-        {"adaptive-max-retries", required_argument, 0, 0},
         {"newton-alpha", required_argument, 0, 0},
         {"max-newton-iters", required_argument, 0, 0},
         {"max-backtracks", required_argument, 0, 0},
@@ -90,32 +64,14 @@ int main(int argc, char *argv[])
     int option_index = 0;
     int c;
     // Use getopt_long to iterate over options
-    while ((c = getopt_long(argc, argv, "ah", long_options, &option_index)) !=
+    while ((c = getopt_long(argc, argv, "h", long_options, &option_index)) !=
            -1) {
-        if (c == 'a') {
-            options.enableAdaptive = true;
-        } else if (c == 'h') {
+        if (c == 'h') {
             printHelp(argv[0]);
             return 0;
         } else if (c == 0) {
             std::string name = long_options[option_index].name;
-            if (name == "atol")
-                options.atol = std::stod(optarg);
-            else if (name == "rtol")
-                options.rtol = std::stod(optarg);
-            else if (name == "safety")
-                options.safety = std::stod(optarg);
-            else if (name == "fac-min")
-                options.facMin = std::stod(optarg);
-            else if (name == "fac-max")
-                options.facMax = std::stod(optarg);
-            else if (name == "h-min")
-                options.hMin = std::stod(optarg);
-            else if (name == "h-max")
-                options.hMax = std::stod(optarg);
-            else if (name == "adaptive-max-retries")
-                options.maxAdaptiveRetries = std::stoi(optarg);
-            else if (name == "newton-alpha")
+            if (name == "newton-alpha")
                 options.newtonAlpha = std::stod(optarg);
             else if (name == "max-newton-iters")
                 options.maxNewtonIters = std::stoi(optarg);
