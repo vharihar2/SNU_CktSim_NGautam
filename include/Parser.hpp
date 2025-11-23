@@ -153,6 +153,22 @@ class Parser
     double tranStep = 0.0;
     double tranStop = 0.0;
 
+    /**
+     * @brief Struct representing a collected subcircuit definition.
+     *
+     * The body stores the raw tokenized lines (uppercase) as they were read
+     * between the `.SUBCKT` and matching `.ENDS` directive. The ports vector
+     * stores the ordered port names declared on the `.SUBCKT` line.
+     */
+    struct SubcktDef
+    {
+        std::string name;
+        std::vector<std::string> ports;
+        std::vector<std::string>
+            body;  // raw lines (uppercased/token-preserved)
+        int definitionLine = 0;
+    };
+
    private:
     /**
      * @brief Map from element names to their corresponding CircuitElement
@@ -217,4 +233,8 @@ class Parser
                                      int lineNumber);
 
     // Additional utility functions as needed
+    // Collected subcircuit definitions discovered during parsing
+    std::map<std::string, SubcktDef> subcktDefs;
+    // Recursion/expansion guard default (configurable later)
+    int subcktRecursionLimit = 32;
 };

@@ -58,6 +58,9 @@ int Parser::parse(const std::string& fileName, SolverDirectiveType& directive)
     int lineNumber = 1;
     int errorCount = 0;
 
+    // Collect top-level non-subckt lines for later expansion
+    std::vector<std::string> topLevelLines;
+
     // Clear previous data
     circuitElements.clear();
     nodes_group2.clear();
@@ -112,46 +115,351 @@ int Parser::parse(const std::string& fileName, SolverDirectiveType& directive)
         // Skip empty token lines
         if (tokens.empty()) continue;
 
-        // Handle explicit end directive
-        if (tokens[0].find(".END") == 0) break;
+        // Handle explicit global end directive (.END). Do NOT treat .ENDS
+        // (subcircuit end) as a global terminator; .ENDS is handled while
+        // collecting subcircuit bodies below.
+        if (tokens[0] == ".END") break;
+
+        // Collect subcircuit definitions: .SUBCKT <name> <port1> <port2> ...
+        if (tokens[0].find(".SUBCKT") == 0) {
+            // Validate presence of a name
+            if (tokens.size() < 2) {
+                std::cerr << "Line " << lineNumber
+                          << ": .SUBCKT requires a name" << std::endl;
+                ++errorCount;
+                continue;
+            }
+            std::string subName = tokens[1];
+            if (subcktDefs.find(subName) != subcktDefs.end()) {
+                std::cerr << "Line " << lineNumber
+                          << ": Duplicate .SUBCKT name '" << subName << "'"
+                          << std::endl;
+                ++errorCount;
+                continue;
+            }
+            Parser::SubcktDef def;
+            def.name = subName;
+            def.definitionLine = lineNumber;
+            // ports are tokens[2] .. end
+            for (size_t i = 2; i < tokens.size(); ++i)
+                def.ports.push_back(tokens[i]);
+
+            // Collect body lines until matching .ENDS (or EOF)
+            std::string bodyLine;
+            bool foundEnds = false;
+            while (std::getline(fileStream, bodyLine)) {
+                ++lineNumber;
+                size_t fc = bodyLine.find_first_not_of(" \t\r\n");
+                if (fc == std::string::npos) continue;
+                char fch = bodyLine[fc];
+                if (fch == '*' || fch == ';') continue;  // comment-only
+
+                std::string upBody = bodyLine;
+                std::transform(upBody.begin(), upBody.end(), upBody.begin(),
+                               ::toupper);
+                // Tokenize the body line to quickly check for .ENDS
+                std::vector<std::string> bodyTokens = tokenizeLine(upBody);
+                if (!bodyTokens.empty() && bodyTokens[0] == ".ENDS") {
+                    foundEnds = true;
+                    break;
+                }
+                // Store the raw uppercased body line for later expansion
+                def.body.push_back(upBody);
+            }
+            if (!foundEnds) {
+                std::cerr << "Line " << def.definitionLine << ": .SUBCKT '"
+                          << def.name << "' missing matching .ENDS"
+                          << std::endl;
+                ++errorCount;
+            }
+            // Save def even if missing .ENDS to allow error reporting later
+            subcktDefs[def.name] = def;
+            continue;
+        }
+
+        // Top-level handling: capture directives and store other lines for
+        // expansion
+        if (tokens[0].find(".OP") == 0) {
+            // Operational point directive
+            if (directive != SolverDirectiveType::NONE) {
+                std::cerr << "Warning: Multiple directives found. Using the "
+                             "first one."
+                          << std::endl;
+                ++errorCount;
+            }
+            directive = SolverDirectiveType::OPERATING_POINT;
+            continue;
+        }
+
+        if (tokens[0].find(".TRAN") == 0) {
+            // Transient directive: .TRAN <Tstep> <Tstop>
+            if (directive != SolverDirectiveType::NONE) {
+                std::cerr << "Warning: Multiple directives found. Using the "
+                             "first one."
+                          << std::endl;
+                ++errorCount;
+            }
+            // Defer numeric parsing/storage until after expansion
+            topLevelLines.push_back(up);
+            continue;
+        }
+
+        // Otherwise treat as a top-level element line and store for expansion
+        topLevelLines.push_back(up);
+    }
+
+    // Second pass: expand X instances and parse expanded lines into elements
+    std::vector<std::string> expandedLines;
+
+    // Helper: simple numeric detector
+    auto isNumberLike = [](const std::string& s) {
+        if (s.empty()) return false;
+        try {
+            std::size_t idx;
+            std::stod(s, &idx);
+            return idx == s.size();
+        } catch (...) {
+            return false;
+        }
+    };
+
+    // Keywords to avoid suffixing
+    std::set<std::string> keywords = {"POLY", "SIN", "PULSE",
+                                      "DC",   "AC",  "VALUE"};
+
+    std::function<void(const std::vector<std::string>&, const std::string&,
+                       int)>
+        expandLines;
+    expandLines = [&](const std::vector<std::string>& lines,
+                      const std::string& parentPath, int depth) {
+        if (depth > subcktRecursionLimit) {
+            std::cerr << "Error: Subcircuit recursion limit ("
+                      << subcktRecursionLimit << ") exceeded while expanding '"
+                      << parentPath << "'" << std::endl;
+            ++errorCount;
+            return;
+        }
+        for (const auto& raw : lines) {
+            std::vector<std::string> toks = tokenizeLine(raw);
+            if (toks.empty()) continue;
+            if (toks[0].size() > 0 && toks[0][0] == 'X') {
+                // instance: Xname <nets...> subcktName
+                if (toks.size() < 2) {
+                    std::cerr << "Error: Malformed subckt instance: '" << raw
+                              << "'" << std::endl;
+                    ++errorCount;
+                    continue;
+                }
+                std::string instName = toks[0];
+                std::string subName = toks.back();
+                std::vector<std::string> nets;
+                if (toks.size() >= 3) {
+                    for (size_t i = 1; i + 1 < toks.size(); ++i)
+                        nets.push_back(toks[i]);
+                }
+                auto it = subcktDefs.find(subName);
+                if (it == subcktDefs.end()) {
+                    std::cerr << "Error: Unknown subcircuit '" << subName
+                              << "' referenced by instance '" << instName << "'"
+                              << std::endl;
+                    ++errorCount;
+                    continue;
+                }
+                const Parser::SubcktDef& def = it->second;
+                if (def.ports.size() != nets.size()) {
+                    std::cerr << "Error: Port count mismatch for instance '"
+                              << instName << "' of '" << subName
+                              << "' (expected " << def.ports.size() << ", got "
+                              << nets.size() << ")" << std::endl;
+                    ++errorCount;
+                    continue;
+                }
+                std::string instancePath =
+                    parentPath.empty() ? instName : parentPath + "." + instName;
+                std::vector<std::string> substituted;
+                for (const auto& bodyLine : def.body) {
+                    std::vector<std::string> btoks = tokenizeLine(bodyLine);
+                    if (btoks.empty()) continue;
+                    std::vector<std::string> ntoks;
+                    std::string newName = btoks[0] + ":" + instancePath;
+                    ntoks.push_back(newName);
+                    for (size_t i = 1; i < btoks.size(); ++i) {
+                        const std::string& tok = btoks[i];
+                        if (tok == "0") {
+                            ntoks.push_back(tok);
+                            continue;
+                        }
+                        bool replaced = false;
+                        for (size_t p = 0; p < def.ports.size(); ++p) {
+                            if (tok == def.ports[p]) {
+                                ntoks.push_back(nets[p]);
+                                replaced = true;
+                                break;
+                            }
+                        }
+                        if (replaced) continue;
+                        if (isNumberLike(tok) ||
+                            keywords.find(tok) != keywords.end()) {
+                            ntoks.push_back(tok);
+                            continue;
+                        }
+                        bool shouldSuffix = false;
+                        if (tok.find_first_of("0123456789") !=
+                            std::string::npos)
+                            shouldSuffix = true;
+                        else if (tok.size() > 1 &&
+                                 std::isalpha((unsigned char)tok[0]) &&
+                                 std::isdigit((unsigned char)tok[1]))
+                            shouldSuffix = true;
+                        if (shouldSuffix)
+                            ntoks.push_back(tok + ":" + instancePath);
+                        else
+                            ntoks.push_back(tok);
+                    }
+                    std::ostringstream oss;
+                    for (size_t i = 0; i < ntoks.size(); ++i) {
+                        if (i) oss << ' ';
+                        oss << ntoks[i];
+                    }
+                    substituted.push_back(oss.str());
+                }
+                expandLines(substituted, instancePath, depth + 1);
+            } else {
+                if (parentPath.empty()) {
+                    expandedLines.push_back(raw);
+                } else {
+                    std::vector<std::string> btoks = tokenizeLine(raw);
+                    if (btoks.empty()) continue;
+                    std::vector<std::string> ntoks;
+                    ntoks.push_back(btoks[0] + ":" + parentPath);
+                    for (size_t i = 1; i < btoks.size(); ++i) {
+                        const std::string& tok = btoks[i];
+                        if (tok == "0") {
+                            ntoks.push_back(tok);
+                            continue;
+                        }
+                        if (isNumberLike(tok) ||
+                            keywords.find(tok) != keywords.end()) {
+                            ntoks.push_back(tok);
+                            continue;
+                        }
+                        bool shouldSuffix = false;
+                        if (tok.find_first_of("0123456789") !=
+                            std::string::npos)
+                            shouldSuffix = true;
+                        else if (tok.size() > 1 &&
+                                 std::isalpha((unsigned char)tok[0]) &&
+                                 std::isdigit((unsigned char)tok[1]))
+                            shouldSuffix = true;
+                        if (shouldSuffix)
+                            ntoks.push_back(tok + ":" + parentPath);
+                        else
+                            ntoks.push_back(tok);
+                    }
+                    std::ostringstream oss;
+                    for (size_t i = 0; i < ntoks.size(); ++i) {
+                        if (i) oss << ' ';
+                        oss << ntoks[i];
+                    }
+                    expandedLines.push_back(oss.str());
+                }
+            }
+        }
+    };
+
+    expandLines(topLevelLines, "", 0);
+
+    // Parse expanded lines into elements
+    int virtualLineNumber = 1;
+    for (const auto& up : expandedLines) {
+        ++virtualLineNumber;
+        std::vector<std::string> tokens = tokenizeLine(up);
+        if (tokens.empty()) continue;
+
+        // Handle directives in expanded lines
+        if (tokens[0].find(".OP") == 0) {
+            if (directive != SolverDirectiveType::NONE) {
+                std::cerr << "Warning: Multiple directives found. Using the "
+                             "first one."
+                          << std::endl;
+                ++errorCount;
+            }
+            directive = SolverDirectiveType::OPERATING_POINT;
+            continue;
+        }
+        if (tokens[0].find(".TRAN") == 0) {
+            if (directive != SolverDirectiveType::NONE) {
+                std::cerr << "Warning: Multiple directives found. Using the "
+                             "first one."
+                          << std::endl;
+                ++errorCount;
+            }
+            if (tokens.size() != 3) {
+                std::cerr << "Line " << virtualLineNumber
+                          << ": .TRAN expects 2 arguments: <Tstep> <Tstop>"
+                          << std::endl;
+                ++errorCount;
+            } else {
+                bool validStep = false;
+                bool validStop = false;
+                double step =
+                    parseValue(tokens[1], virtualLineNumber, validStep);
+                double stop =
+                    parseValue(tokens[2], virtualLineNumber, validStop);
+                if (!validStep || !validStop) {
+                    std::cerr << "Line " << virtualLineNumber
+                              << ": Invalid numeric argument in .TRAN directive"
+                              << std::endl;
+                    ++errorCount;
+                } else if (step <= 0.0 || stop <= 0.0) {
+                    std::cerr << "Line " << virtualLineNumber
+                              << ": .TRAN arguments must be positive numbers"
+                              << std::endl;
+                    ++errorCount;
+                } else if (step > stop) {
+                    std::cerr << "Line " << virtualLineNumber
+                              << ": .TRAN step must be <= stop time"
+                              << std::endl;
+                    ++errorCount;
+                } else {
+                    this->tranStep = step;
+                    this->tranStop = stop;
+                    directive = SolverDirectiveType::TRANSIENT;
+                }
+            }
+            continue;
+        }
 
         std::shared_ptr<CircuitElement> element = nullptr;
-        // Dispatch to element-specific parse functions
         if (tokens[0].find("R") == 0) {
             ++elementCounts.resistorCount;
-            element = Resistor::parse(*this, tokens, lineNumber);
-            if (element && element->getGroup() == Group::G2) {
+            element = Resistor::parse(*this, tokens, virtualLineNumber);
+            if (element && element->getGroup() == Group::G2)
                 nodes_group2.insert(element->getName());
-            }
         } else if (tokens[0].find("V") == 0 && tokens[0].find("VC") != 0) {
             ++elementCounts.voltageSourceCount;
-            element = VoltageSource::parse(*this, tokens, lineNumber);
-            if (element) {
-                nodes_group2.insert(element->getName());
-            }
+            element = VoltageSource::parse(*this, tokens, virtualLineNumber);
+            if (element) nodes_group2.insert(element->getName());
         } else if (tokens[0].find("I") == 0 && tokens[0].find("IC") != 0) {
             ++elementCounts.currentSourceCount;
-            element = CurrentSource::parse(*this, tokens, lineNumber);
+            element = CurrentSource::parse(*this, tokens, virtualLineNumber);
         } else if (tokens[0].find("C") == 0) {
             ++elementCounts.capacitorCount;
-            // Support optional nonlinear polynomial model syntax:
-            // Cname nodeA nodeB value [POLY coeff0 coeff1 ...]
             if (tokens.size() >= 5 && tokens[4] == "POLY") {
-                // Parse base value
                 bool validValue = false;
-                double value = parseValue(tokens[3], lineNumber, validValue);
+                double value =
+                    parseValue(tokens[3], virtualLineNumber, validValue);
                 if (!validValue) {
-                    std::cerr << "Line " << lineNumber
+                    std::cerr << "Line " << virtualLineNumber
                               << ": Invalid capacitor value" << std::endl;
                     ++errorCount;
                 } else {
-                    // Parse coefficients from tokens[5]..end
                     std::vector<double> coeffs;
                     for (size_t i = 5; i < tokens.size(); ++i) {
                         bool ok = false;
-                        double c = parseValue(tokens[i], lineNumber, ok);
+                        double c = parseValue(tokens[i], virtualLineNumber, ok);
                         if (!ok) {
-                            std::cerr << "Line " << lineNumber
+                            std::cerr << "Line " << virtualLineNumber
                                       << ": Invalid polynomial coefficient '"
                                       << tokens[i] << "'" << std::endl;
                             ++errorCount;
@@ -164,33 +472,32 @@ int Parser::parse(const std::string& fileName, SolverDirectiveType& directive)
                         element = std::make_shared<NonlinearCapacitor>(
                             tokens[0], tokens[1], tokens[2], value, model);
                     } else {
-                        std::cerr << "Line " << lineNumber
+                        std::cerr << "Line " << virtualLineNumber
                                   << ": POLY specified but no coefficients"
                                   << std::endl;
                         ++errorCount;
                     }
                 }
             } else {
-                element = Capacitor::parse(*this, tokens, lineNumber);
+                element = Capacitor::parse(*this, tokens, virtualLineNumber);
             }
         } else if (tokens[0].find("L") == 0) {
             ++elementCounts.inductorCount;
-            // Support optional nonlinear polynomial model syntax for inductors:
-            // Lname nodeA nodeB value [POLY coeff0 coeff1 ...]
             if (tokens.size() >= 5 && tokens[4] == "POLY") {
                 bool validValue = false;
-                double value = parseValue(tokens[3], lineNumber, validValue);
+                double value =
+                    parseValue(tokens[3], virtualLineNumber, validValue);
                 if (!validValue) {
-                    std::cerr << "Line " << lineNumber
+                    std::cerr << "Line " << virtualLineNumber
                               << ": Invalid inductor value" << std::endl;
                     ++errorCount;
                 } else {
                     std::vector<double> coeffs;
                     for (size_t i = 5; i < tokens.size(); ++i) {
                         bool ok = false;
-                        double c = parseValue(tokens[i], lineNumber, ok);
+                        double c = parseValue(tokens[i], virtualLineNumber, ok);
                         if (!ok) {
-                            std::cerr << "Line " << lineNumber
+                            std::cerr << "Line " << virtualLineNumber
                                       << ": Invalid polynomial coefficient '"
                                       << tokens[i] << "'" << std::endl;
                             ++errorCount;
@@ -202,95 +509,37 @@ int Parser::parse(const std::string& fileName, SolverDirectiveType& directive)
                         auto model = makePolynomialFluxModel(coeffs);
                         element = std::make_shared<NonlinearInductor>(
                             tokens[0], tokens[1], tokens[2], value, model);
-                        // ensure branch variable present
                         nodes_group2.insert(element->getName());
                     } else {
-                        std::cerr << "Line " << lineNumber
+                        std::cerr << "Line " << virtualLineNumber
                                   << ": POLY specified but no coefficients"
                                   << std::endl;
                         ++errorCount;
                     }
                 }
             } else {
-                element = Inductor::parse(*this, tokens, lineNumber);
-                if (element) {
-                    nodes_group2.insert(element->getName());
-                }
+                element = Inductor::parse(*this, tokens, virtualLineNumber);
+                if (element) nodes_group2.insert(element->getName());
             }
         } else if (tokens[0].find("VC") == 0) {
             ++elementCounts.depVoltageSourceCount;
-            element = DependentVoltageSource::parse(*this, tokens, lineNumber);
-            if (element) {
-                nodes_group2.insert(element->getName());
-            }
+            element =
+                DependentVoltageSource::parse(*this, tokens, virtualLineNumber);
+            if (element) nodes_group2.insert(element->getName());
         } else if (tokens[0].find("IC") == 0) {
             ++elementCounts.depCurrentSourceCount;
-            element = DependentCurrentSource::parse(*this, tokens, lineNumber);
-
-        } else if (tokens[0].find(".OP") == 0) {
-            // Operational point directive
-            if (directive != SolverDirectiveType::NONE) {
-                std::cerr << "Warning: Multiple directives found. Using the "
-                             "first one."
-                          << std::endl;
-                ++errorCount;
-            }
-            directive = SolverDirectiveType::OPERATING_POINT;
-
-        } else if (tokens[0].find(".TRAN") == 0) {
-            // Transient directive: .TRAN <Tstep> <Tstop>
-            if (directive != SolverDirectiveType::NONE) {
-                std::cerr << "Warning: Multiple directives found. Using the "
-                             "first one."
-                          << std::endl;
-                ++errorCount;
-            }
-            // Expect exactly 3 tokens: .TRAN Tstep Tstop
-            if (tokens.size() != 3) {
-                std::cerr << "Line " << lineNumber
-                          << ": .TRAN expects 2 arguments: <Tstep> <Tstop>"
-                          << std::endl;
-                ++errorCount;
-            } else {
-                bool validStep = false;
-                bool validStop = false;
-                double step = parseValue(tokens[1], lineNumber, validStep);
-                double stop = parseValue(tokens[2], lineNumber, validStop);
-                if (!validStep || !validStop) {
-                    std::cerr << "Line " << lineNumber
-                              << ": Invalid numeric argument in .TRAN directive"
-                              << std::endl;
-                    ++errorCount;
-                } else if (step <= 0.0 || stop <= 0.0) {
-                    std::cerr << "Line " << lineNumber
-                              << ": .TRAN arguments must be positive numbers"
-                              << std::endl;
-                    ++errorCount;
-                } else if (step > stop) {
-                    std::cerr << "Line " << lineNumber
-                              << ": .TRAN step must be <= stop time"
-                              << std::endl;
-                    ++errorCount;
-                } else {
-                    // Store parsed values in the parser instance
-                    this->tranStep = step;
-                    this->tranStop = stop;
-                    directive = SolverDirectiveType::TRANSIENT;
-                }
-            }
+            element =
+                DependentCurrentSource::parse(*this, tokens, virtualLineNumber);
         } else {
-            std::cerr << "Error: Unknown element at line " << lineNumber << ": "
-                      << line << std::endl;
+            std::cerr
+                << "Error: Unknown element after expansion at virtual line "
+                << virtualLineNumber << ": " << up << std::endl;
             ++errorCount;
         }
 
         if (element) {
-            // if (element->getGroup() == Group::G2) {
-            //     nodes_group2.insert(element->getName());
-            // }
             nodes_group2.insert(element->getNodeA());
             nodes_group2.insert(element->getNodeB());
-
             circuitElements.push_back(element);
             elementMap[element->getName()] = element;
         }
