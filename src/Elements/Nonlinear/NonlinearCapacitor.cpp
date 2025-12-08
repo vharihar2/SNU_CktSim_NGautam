@@ -1,3 +1,31 @@
+/*
+ * Copyright (c) 2022, Shiv Nadar University, Delhi NCR, India. All Rights
+ * Reserved. Permission to use, copy, modify and distribute this software for
+ * educational, research, and not-for-profit purposes, without fee and without a
+ * signed license agreement, is hereby granted, provided that this paragraph and
+ * the following two paragraphs appear in all copies, modifications, and
+ * distributions.
+ *
+ * IN NO EVENT SHALL SHIV NADAR UNIVERSITY BE LIABLE TO ANY PARTY FOR DIRECT,
+ * INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST
+ * PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE.
+ *
+ * SHIV NADAR UNIVERSITY SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT
+ * NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ * PARTICULAR PURPOSE. THE SOFTWARE PROVIDED HEREUNDER IS PROVIDED "AS IS". SHIV
+ * NADAR UNIVERSITY HAS NO OBLIGATION TO PROVIDE MAINTENANCE, SUPPORT, UPDATES,
+ * ENHANCEMENTS, OR MODIFICATIONS.
+ */
+/**
+ * @file NonlinearCapacitor.cpp
+ * @brief Implementation of NonlinearCapacitor (nonlinear charge-based
+ * capacitor).
+ *
+ * Implements companion computation (per-step and per-iterate), transient
+ * stamping, state update, diagnostics, and checkpoint/restore helpers.
+ * Comments are concise; API-level documentation is in the header.
+ */
+
 #include "NonlinearCapacitor.hpp"
 
 #include "../lib/external/Eigen/Dense"
@@ -6,11 +34,10 @@
 
 void NonlinearCapacitor::computeCompanion(double h)
 {
-    // Fallback: evaluate at previous state (useful for non-iterative calls)
-    // Use the stored u_prev_ and q_prev_ to compute linearized companion.
+    // Compute trapezoidal companion linearized at previous state (fallback).
     const double dqdu = model_->dqdu(u_prev_);
     Geq_ = (2.0 / h) * dqdu;
-    // Ieq consistent with TR Norton: Ieq = Geq * u_prev - i_prev
+    // Ieq = Geq * u_prev - i_prev (TR Norton convention)
     Ieq_ = Geq_ * u_prev_ - i_prev_;
 }
 
@@ -18,8 +45,8 @@ void NonlinearCapacitor::computeCompanionIter(
     double h, const Eigen::Ref<const Eigen::VectorXd> &xk,
     const std::map<std::string, int> &indexMap)
 {
-    // Determine node voltages for this element from the current Newton iterate
-    // xk. Handle ground ('0') which is not present in indexMap.
+    // Linearize q(u) at the current Newton iterate xk. Read node voltages
+    // from xk; treat ground ("0") as voltage 0.
     auto findIndex = [&](const std::string &n) -> int {
         if (n == "0") return -1;
         auto it = indexMap.find(n);

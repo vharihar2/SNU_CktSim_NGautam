@@ -18,9 +18,38 @@
  */
 
 /**
- * @file main.cpp
+ * @file Solver.cpp
+ * @brief Implementation of solver entrypoints and MNA assembly helpers.
  *
- * @brief Contains the  implemntation of the main functions
+ * This file contains the concrete implementations for the high-level solver
+ * routines declared in `Solver.hpp`. It implements a compact, readable driver
+ * for:
+ *
+ *  - Building name->index maps for unknowns (nodes and group-2 element
+ * currents).
+ *  - Constructing the node connectivity graph used for traversal-based
+ * stamping.
+ *  - Assembling MNA matrices for DC and transient analyses (including a helper
+ *    to assemble only the matrix for diagnostics).
+ *  - Running a fixed-step transient driver that uses trapezoidal-rule
+ * companions and Newton iterations with simple regularization and backtracking.
+ *
+ * Implementation notes (concise):
+ *  - API-level documentation (function signatures, parameters, and expected
+ *    behavior) lives in `Solver.hpp`. The implementation below contains
+ *    focused comments only where algorithmic choices or non-obvious behavior
+ *    occur.
+ *  - Traversal-based stamping uses a `Node`/`Edge` graph; each node's
+ *    `traverse()` method is responsible for stamping incident elements.
+ *  - The transient driver defends against ill-conditioned linear solves by:
+ *      * performing LU factorization and trying small diagonal regularizers
+ * when the factorization reports non-invertibility,
+ *      * rejecting non-finite iterates and using under-relaxation/backtracking
+ *        to produce stable trial iterates,
+ *      * limiting growth of solution norms to protect against runaway iterates.
+ *
+ * Keep the implementation straightforward and avoid duplicating header-level
+ * API docs; update inline notes only when the algorithm or invariants change.
  */
 
 #include "Solver.hpp"

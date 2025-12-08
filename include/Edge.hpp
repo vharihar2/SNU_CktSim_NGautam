@@ -19,43 +19,58 @@
 
 /**
  * @file Edge.hpp
- * @brief Defines the Edge class for representing connections between nodes in a
- * circuit graph.
+ * @brief Graph edge representing a connection between two circuit nodes.
  *
- * This file contains the definition of the Edge class, which models a
- * connection (edge) between two nodes in the circuit graph. Each edge is
- * associated with a circuit element.
+ * This header declares the `Edge` type used by the circuit graph utilities.
+ * An `Edge` connects two `Node` instances and associates that connection with
+ * a `CircuitElement` (for example a resistor, source, or reactive element).
+ *
+ * The structure is intentionally simple: ownership is expressed via
+ * `std::shared_ptr` so graph traversal and lifetime management are
+ * straightforward for the solver and analysis code.
  */
 
 #pragma once
 
 #include <memory>
 
-// Forward Declaration
+// Forward declarations
 class Node;
 class CircuitElement;
 
 /**
  * @class Edge
- * @brief Represents a connection (edge) between two nodes in the circuit graph.
+ * @brief Represents a connection between two nodes in the circuit graph.
  *
- * The Edge class models a connection between two nodes in the circuit. Each
- * edge is associated with a specific circuit element (such as a resistor,
- * capacitor, etc.).
+ * An `Edge` models the electrical connection between `source` and `target`
+ * nodes and stores a pointer to the corresponding `CircuitElement`. The graph
+ * utilities use `Edge` instances to build adjacency lists and traverse the
+ * circuit topology.
  */
 class Edge
 {
    public:
     /**
-     * @brief Pointer to the source (starting) node of the edge
+     * @brief Shared pointer to the source node (where the element's positive
+     *        terminal is connected).
+     *
+     * May be null if the node was removed or not yet resolved.
      */
     std::shared_ptr<Node> source;
+
     /**
-     * @brief Pointer to the target (ending) node of the edge
+     * @brief Shared pointer to the target node (where the element's negative
+     *        terminal is connected).
+     *
+     * May be null if the node was removed or not yet resolved.
      */
     std::shared_ptr<Node> target;
+
     /**
-     * @brief Pointer to the circuit element that this edge represents
+     * @brief Shared pointer to the circuit element associated with this edge.
+     *
+     * The element drives the electrical behaviour of the connection (R, C, L,
+     * source, controlled source, etc.).
      */
     std::shared_ptr<CircuitElement> circuitElement;
 };

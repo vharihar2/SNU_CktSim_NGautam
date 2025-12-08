@@ -28,7 +28,8 @@ if(DOXYGEN_FOUND)
 
   # Here we must make Doxygen do not generate the docs for dependency See
   # https://cmake.org/cmake/help/latest/module/FindDoxygen.html#variable:DOXYGEN_EXCLUDE_PATTERNS
-  set(DOXYGEN_EXCLUDE_PATTERNS */external/* */build/*)
+  # Exclude external, build and tests directories from documentation
+  set(DOXYGEN_EXCLUDE_PATTERNS */external/* */build/* */tests/*)
 
   # Treeview and appearence of the documentation pages
   set(DOXYGEN_DISABLE_INDEX YES)
@@ -42,7 +43,7 @@ if(DOXYGEN_FOUND)
   # Dot graph options
   set(DOXYGEN_HAVE_DOT YES)
   set(DOXYGEN_CLASS_DIAGRAMS YES)
-  set(DOXYGEN_COLLABORATION_GRAPH YES)  
+  set(DOXYGEN_COLLABORATION_GRAPH YES)
   set(DOXYGEN_UML_LOOK YES)
   set(DOXYGEN_HIDE_UNDOC_RELATIONS NO)
   set(DOXYGEN_CLASS_GRAPH YES)

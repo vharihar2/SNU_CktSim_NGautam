@@ -1,3 +1,30 @@
+/* Copyright (c) 2022, Shiv Nadar University, Delhi NCR, India. All Rights
+ * Reserved. Permission to use, copy, modify and distribute this software for
+ * educational, research, and not-for-profit purposes, without fee and without a
+ * signed license agreement, is hereby granted, provided that this paragraph and
+ * the following two paragraphs appear in all copies, modifications, and
+ * distributions.
+ *
+ * IN NO EVENT SHALL SHIV NADAR UNIVERSITY BE LIABLE TO ANY PARTY FOR DIRECT,
+ * INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST
+ * PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE.
+ *
+ * SHIV NADAR UNIVERSITY SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT
+ * NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ * PARTICULAR PURPOSE. THE SOFTWARE PROVIDED HEREUNDER IS PROVIDED "AS IS". SHIV
+ * NADAR UNIVERSITY HAS NO OBLIGATION TO PROVIDE MAINTENANCE, SUPPORT, UPDATES,
+ * ENHANCEMENTS, OR MODIFICATIONS.
+ */
+/**
+ * @file Capacitor.cpp
+ * @brief Implementation of the Capacitor class declared in Capacitor.hpp.
+ *
+ * This file provides the concrete implementations for the Capacitor element's
+ * methods: DC stamp (no-op), parsing factory, trapezoidal companion
+ * computation, transient stamping (Norton equivalent), and state update from
+ * the solver's solution vector.
+ */
+
 #include "Capacitor.hpp"
 
 #include <memory>
@@ -9,10 +36,12 @@ void Capacitor::stamp(std::vector<std::vector<double>>& mna,
                       std::vector<double>& rhs,
                       std::map<std::string, int>& indexMap)
 {
-    // Open circuit in DC; nothing to stamp.
-    if (group == Group::G1) {
-    } else {
-    }
+    // Open circuit in DC; nothing to stamp. Mark parameters as used to avoid
+    // unused-parameter warnings.
+    (void)mna;
+    (void)rhs;
+    (void)indexMap;
+    return;
 }
 
 std::shared_ptr<CircuitElement> Capacitor::parse(
@@ -71,42 +100,35 @@ void Capacitor::stampTransient(std::vector<std::vector<double>>& mna,
                                std::vector<double>& rhs,
                                std::map<std::string, int>& indexMap)
 {
-    // Companion (Norton) model: Geq between nodeA/nodeB, Ieq current source
-    // Precondition: computeCompanion(h) has been called so Geq and Ieq are set.
+    // Stamp Norton companion (Geq between nodes, Ieq injected). Assumes
+    // computeCompanion called.
 
-    // Helper to get index; returns -1 for ground or missing
+    // Return index for node or -1 for ground/missing
     auto idx = [&](const std::string& node) -> int {
         if (node == "0") return -1;
         auto it = indexMap.find(node);
         return (it == indexMap.end()) ? -1 : it->second;
     };
 
-    int vplus = idx(nodeA);   // nodeA index, -1 if ground
-    int vminus = idx(nodeB);  // nodeB index, -1 if ground
+    int vplus = idx(nodeA);
+    int vminus = idx(nodeB);
 
-    // Stamp conductance (Geq) into MNA (handles ground cases)
+    // Stamp conductance Geq into MNA, handling ground.
     if (vplus == -1 && vminus == -1) {
-        // both nodes are ground -> nothing to stamp
+        // nothing to stamp
     } else if (vplus == -1) {
-        // nodeA is ground, stamp at vminus only
         mna[vminus][vminus] += Geq;
     } else if (vminus == -1) {
-        // nodeB is ground, stamp at vplus only
         mna[vplus][vplus] += Geq;
     } else {
-        // neither node is ground: full stamp like a resistor
         mna[vplus][vplus] += Geq;
         mna[vplus][vminus] -= Geq;
         mna[vminus][vplus] -= Geq;
         mna[vminus][vminus] += Geq;
     }
 
-    // Stamp the companion current Ieq into RHS.
-    // Convention: if Ieq is the current from nodeA -> nodeB, then
-    // we add -Ieq at nodeA (vplus) and +Ieq at nodeB (vminus).
-    // (This matches earlier derivation: rhs[vplus] -= Ieq; rhs[vminus] += Ieq.)
+    // Inject companion current Ieq (from nodeA -> nodeB) into RHS.
     if (vplus != -1) {
-        // Ensure rhs has correct size (assumes solver allocated it)
         rhs[vplus] -= Ieq;
     }
     if (vminus != -1) {
@@ -118,10 +140,11 @@ void Capacitor::updateStateFromSolution(
     const Eigen::Ref<const Eigen::VectorXd>& x,
     const std::map<std::string, int>& indexMap)
 {
-    // Read node voltages (treat missing or ground node as 0.0)
+    // Read node voltages (ground/missing -> 0)
     double vplus = 0.0;
     double vminus = 0.0;
 
+    // Handle ground/missing nodes
     if (nodeA != "0") {
         auto it = indexMap.find(nodeA);
         if (it != indexMap.end()) vplus = x[it->second];
@@ -132,11 +155,8 @@ void Capacitor::updateStateFromSolution(
         if (it != indexMap.end()) vminus = x[it->second];
     }
 
-    // Voltage across capacitor at n+1
+    // Update state: v_prev and i_prev (i_{n+1} = Geq * v_{n+1} - Ieq)
     double u_n1 = vplus - vminus;
     v_prev = u_n1;
-
-    // Current at n+1 using TR companion relation:
-    // i_{n+1} = Geq * v_{n+1} - Ieq
     i_prev = Geq * u_n1 - Ieq;
 }

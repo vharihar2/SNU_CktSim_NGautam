@@ -19,8 +19,31 @@
 
 /**
  * @file Parser.cpp
+ * @brief Implementation of the Parser declared in Parser.hpp.
  *
- * @brief Contains the implementation of the Parser class
+ * This file contains the concrete implementation of the `Parser` class.
+ * The parser uses a two-pass approach:
+ *
+ *  1. Read the netlist, collect `.SUBCKT` definitions and top-level lines.
+ *  2. Expand hierarchical instances (lines beginning with `X...`) into a
+ *     flattened set of element lines and then parse those lines into
+ *     concrete element objects (e.g., `Resistor`, `Capacitor`,
+ * `VoltageSource`).
+ *
+ * Implementation notes (concise):
+ *  - Tokenization preserves parenthesized groups (so expressions like
+ *    SIN(...) remain intact) and uppercases text for consistent keyword
+ *    recognition while leaving punctuation unchanged.
+ *  - Subcircuit expansion performs instance-qualified name mangling using
+ *    the `<element>:<instancePath>` convention to avoid name collisions.
+ *  - Numeric parsing follows strict SPICE-like rules: common suffixes
+ *    (T, G, MEG, K, M, U, N, P, F) are supported and the mantissa must be
+ *    a well-formed floating literal (std::stod must consume the entire
+ * mantissa).
+ *
+ * Keep API-level documentation in the header (`Parser.hpp`). This file
+ * contains only concise implementation-level documentation and targeted
+ * inline comments to aid future maintainers.
  */
 
 #include "Parser.hpp"
@@ -670,7 +693,7 @@ double Parser::parseValue(const std::string& valueStr, int lineNumber,
 
     // Map of recognized suffixes (uppercase) -> multiplier
     static const std::unordered_map<std::string, double> suffixMap = {
-        {"T", 1e12}, {"G", 1e9}, {"MEG", 1e6}, {"K", 1e3}, {"M", 1e-3},
+        {"T", 1e12}, {"G", 1e9},  {"MEG", 1e6}, {"K", 1e3},  {"M", 1e-3},
         {"U", 1e-6}, {"N", 1e-9}, {"P", 1e-12}, {"F", 1e-15}};
 
     // Separate trailing alphabetic suffix (if any). We accept up to 3 letters
@@ -694,7 +717,7 @@ double Parser::parseValue(const std::string& valueStr, int lineNumber,
     for (auto& c : suffix) c = (char)std::toupper((unsigned char)c);
 
     // Helper to parse a mantissa and require full consumption of the string
-    auto parseMantissaStrict = [&](const std::string& m, double &out) -> bool {
+    auto parseMantissaStrict = [&](const std::string& m, double& out) -> bool {
         try {
             size_t idx = 0;
             out = std::stod(m, &idx);

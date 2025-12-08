@@ -43,15 +43,20 @@ class Parser;
 
 /**
  * @enum ElementType
- * @brief Specifies the type of circuit element supported by CircuitElement.
+ * @brief Enumerates supported circuit element categories.
+ *
+ * Each enumerator identifies a concrete element class used by the parser and
+ * solver. This enum is primarily used for diagnostics and to simplify simple
+ * switch-based behaviour in legacy code; it may be removed as the codebase is
+ * refactored to use polymorphism or type traits.
  */
 enum class ElementType
 {
-    V,  /**< Voltage source */
-    I,  /**< Current source */
+    V,  /**< Independent voltage source */
+    I,  /**< Independent current source */
     R,  /**< Resistor */
-    Ic, /**< Current controlled current source */
-    Vc, /**< Voltage controlled voltage source */
+    Ic, /**< Current-controlled current source (CCCS) */
+    Vc, /**< Voltage-controlled voltage source (VCVS) */
     C,  /**< Capacitor */
     L   /**< Inductor */
 };
@@ -88,15 +93,23 @@ inline std::ostream& operator<<(std::ostream& os, ElementType et)
 }
 /**
  * @enum Group
- * @brief Specifies the group of circuit elements for matrix handling.
+ * @brief Classification used during Modified Nodal Analysis (MNA) assembly.
  *
- * Group 1: Elements whose currents need to be eliminated.
- * Group 2: Elements not in Group 1; other methods must be employed.
+ * Elements are classified into groups to guide how they are represented in the
+ * MNA system:
+ *  - G1: Elements whose branch currents are eliminated from the primary
+ *        nodal system (for example, using current elimination or passive
+ *        injection techniques).
+ *  - G2: Elements that typically require auxiliary unknowns (e.g. branch
+ *        currents for voltage sources or controlled sources) and therefore
+ *        a different stamping strategy.
+ *
+ * This classification affects both DC and transient stamping paths.
  */
 enum class Group
 {
-    G1, /**< Group 1: the currents for these elements need to be eliminated */
-    G2  /**< Group 2: Elements not in G1. Other methods must be employed */
+    G1, /**< Group 1: branch currents eliminated during assembly */
+    G2  /**< Group 2: auxiliary unknowns (explicit branch current variables) */
 };
 
 inline std::ostream& operator<<(std::ostream& os, Group group)
@@ -116,13 +129,19 @@ inline std::ostream& operator<<(std::ostream& os, Group group)
 }
 /**
  * @enum ControlVariable
- * @brief Specifies the controlling variable for controlled sources.
+ * @brief Type of the controlling quantity used by dependent sources.
+ *
+ * Controlled (dependent) sources refer to another circuit variable when
+ * computing their output. This enum identifies the controlling quantity:
+ *  - none: not a controlled source / no controlling variable set
+ *  - v:    the source is controlled by a voltage elsewhere in the circuit
+ *  - i:    the source is controlled by a current elsewhere in the circuit
  */
 enum class ControlVariable
 {
-    none, /**< No controlling variable */
-    v,    /**< Voltage */
-    i     /**< Current */
+    none, /**< Not a controlled source */
+    v,    /**< Voltage-controlled */
+    i     /**< Current-controlled */
 };
 
 inline std::ostream& operator<<(std::ostream& os, ControlVariable cv)
@@ -226,12 +245,36 @@ class CircuitElement
                        std::map<std::string, int>& indexMap) = 0;
 
     // NOTE: --- Transient / time-domain hooks --
-    // Backwards-compatible companion computation for linear elements.
+
+    /**
+     * @brief Compute per-timestep companion parameters for transient solves.
+     *
+     * Linear elements (C, L, etc.) can compute a time-step dependent companion
+     * model (e.g. Norton/Thévenin equivalents using the trapezoidal rule or
+     * backward-Euler). The solver calls this method once per time-step to allow
+     * the element to prepare coefficients (conductances, equivalent currents,
+     * etc.) used during transient assembly.
+     *
+     * Default implementation is a no-op for elements that have no transient
+     * behaviour.
+     *
+     * @param h Time-step size (seconds). Implementations should guard against
+     *          non-positive values.
+     */
     virtual void computeCompanion([[maybe_unused]] double h) {}
 
-    // Per-Newton-iteration companion computation for TR nonlinear solves.
-    // Default implementation forwards to the legacy `computeCompanion(h)` so
-    // existing linear elements continue to work without change.
+    /**
+     * @brief Per-Newton-iteration companion update for nonlinear TR solves.
+     *
+     * For nonlinear elements participating in a Newton solve per time-step,
+     * this hook allows updating companion parameters based on the current
+     * Newton iterate `xk`. The default forwards to `computeCompanion(h)` to
+     * preserve backwards compatibility with linear elements.
+     *
+     * @param h Current time-step size.
+     * @param xk Current Newton iterate (solution vector).
+     * @param indexMap Map from node/element names to indices in `xk`.
+     */
     virtual void computeCompanionIter(
         [[maybe_unused]] double h,
         [[maybe_unused]] const Eigen::Ref<const Eigen::VectorXd>& xk,
@@ -240,19 +283,34 @@ class CircuitElement
         computeCompanion(h);
     }
 
-    // Flag indicating whether this element is nonlinear. Nonlinear elements
-    // should override this to return true so the solver can decide whether to
-    // call iterative companion routines.
+    /**
+     * @brief Indicates whether the element is nonlinear.
+     *
+     * Nonlinear elements should override this to return true so the transient
+     * solver can decide whether to invoke iterative companion update hooks.
+     *
+     * @return true if element is nonlinear, false otherwise (default).
+     */
     virtual bool isNonlinear() const { return false; }
-    // Stamp the transient companion contributions for this element into `mna`
-    // and `rhs`. Default implementation forwards to the DC `stamp` behavior so
-    // existing elements compile.
+
+    /**
+     * @brief Stamp transient companion contributions for this element.
+     *
+     * Elements that implement a transient companion model should override this
+     * method to insert per-time-step conductances / equivalent sources into the
+     * provided `mna` and `rhs`. The default implementation simply calls the DC
+     * `stamp(...)` method so that elements without transient behavior remain
+     * compatible.
+     *
+     * @param mna Modified Nodal Analysis matrix (mutated in-place).
+     * @param rhs Right-hand side vector (mutated in-place).
+     * @param indexMap Map from node/element names to indices in `mna`/`rhs`.
+     */
     virtual void stampTransient(std::vector<std::vector<double>>& mna,
                                 std::vector<double>& rhs,
                                 std::map<std::string, int>& indexMap)
     {
-        // By default, use the DC stamp (useful until individual elements
-        // override this).
+        // Default: fall back to DC stamp.
         stamp(mna, rhs, indexMap);
     }
 

@@ -16,11 +16,14 @@
  * NADAR UNIVERSITY HAS NO OBLIGATION TO PROVIDE MAINTENANCE, SUPPORT, UPDATES,
  * ENHANCEMENTS, OR MODIFICATIONS.
  */
-
 /**
  * @file Node.cpp
+ * @brief Implementation of Node traversal used to stamp elements into MNA.
  *
- * @brief Contains the implementation of the Node class
+ * This file implements `Node::traverse`, which walks the circuit connectivity
+ * graph and invokes element stamping routines (DC or transient) to populate
+ * the global MNA matrix and RHS vector. The traversal is depth-first and uses
+ * the `processed` flag to avoid revisiting nodes/elements.
  */
 
 #include "Node.hpp"
@@ -32,23 +35,28 @@ void Node::traverse(std::map<std::string, int> &indexMap,
                     std::vector<std::vector<double>> &mna,
                     std::vector<double> &rhs, bool isTransient)
 {
-    // Skip ground node and already processed nodes
+    // Skip ground and already visited nodes.
     if (name == "0" || processed) return;
     processed = true;
 
-    // Process each edge (circuit element) connected to this node
+    // Stamp each incident element once.
     for (const auto &edge : edges) {
+        // Skip elements already stamped by another node traversal.
         if (edge->circuitElement->isProcessed()) continue;
         edge->circuitElement->setProcessed(true);
-        if (isTransient)
+
+        // Choose transient or DC stamping according to caller.
+        if (isTransient) {
             edge->circuitElement->stampTransient(mna, rhs, indexMap);
-        else {
+        } else {
             edge->circuitElement->stamp(mna, rhs, indexMap);
         }
     }
 
-    // Recursively traverse connected nodes
+    // Recurse to adjacent nodes (depth-first).
     for (const auto &edge : edges) {
-        edge->target->traverse(indexMap, mna, rhs, isTransient);
+        if (edge->target) {
+            edge->target->traverse(indexMap, mna, rhs, isTransient);
+        }
     }
 }

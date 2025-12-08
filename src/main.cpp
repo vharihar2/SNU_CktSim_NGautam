@@ -19,8 +19,19 @@
 
 /**
  * @file main.cpp
+ * @brief Top-level program driver and CLI parsing.
  *
- * @brief Contains the  implemntation of the main functions
+ * This file contains the program entrypoint for the simulator. It is
+ * responsible for:
+ *  - parsing command-line arguments and populating a SolverOptions instance,
+ *  - validating option values,
+ *  - choosing the input netlist filename (default: "circuit.sns"),
+ *  - dispatching to the solver entrypoint (`runSolver`) with the prepared
+ *    arguments and options.
+ *
+ * The detailed solver behaviour is implemented elsewhere (see Solver.hpp /
+ * Solver.cpp). Keep this file focused on CLI handling and input validation so
+ * that automated tests can invoke the solver entrypoints directly.
  */
 
 #include "main.hpp"
@@ -32,6 +43,15 @@
 #include "Solver.hpp"
 #include "SolverOptions.hpp"
 
+/**
+ * @brief Print program usage and available command-line options.
+ *
+ * This helper prints a short usage summary and a list of supported long
+ * options recognized by the driver. It is intentionally small and is intended
+ * for use by the top-level `main` only.
+ *
+ * @param prog Program name (typically argv[0]) used in the usage line.
+ */
 static void printHelp(const char *prog)
 {
     std::cout << "Usage: " << prog << " [options] [netlist-file]\n";
@@ -50,6 +70,21 @@ static void printHelp(const char *prog)
     std::cout << "  --help                    Show this help message\n";
 }
 
+/**
+ * @brief Program entry point.
+ *
+ * The top-level `main` processes long and short command-line options, populates
+ * a `SolverOptions` instance, validates option values, determines the input
+ * netlist filename (default: "circuit.sns" when none is provided), and calls
+ * the solver entrypoint `runSolver(...)`.
+ *
+ * The function returns the exit status returned by `runSolver` or a non-zero
+ * value if option validation fails.
+ *
+ * @param argc Number of command-line arguments.
+ * @param argv Array of command-line argument strings.
+ * @return int Exit status (0 indicates success).
+ */
 int main(int argc, char *argv[])
 {
     SolverOptions options;

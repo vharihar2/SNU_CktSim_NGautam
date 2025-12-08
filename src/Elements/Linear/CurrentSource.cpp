@@ -1,3 +1,31 @@
+/*
+ * Copyright (c) 2022, Shiv Nadar University, Delhi NCR, India. All Rights
+ * Reserved. Permission to use, copy, modify and distribute this software for
+ * educational, research, and not-for-profit purposes, without fee and without a
+ * signed license agreement, is hereby granted, provided that this paragraph and
+ * the following two paragraphs appear in all copies, modifications, and
+ * distributions.
+ *
+ * IN NO EVENT SHALL SHIV NADAR UNIVERSITY BE LIABLE TO ANY PARTY FOR DIRECT,
+ * INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST
+ * PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE.
+ *
+ * SHIV NADAR UNIVERSITY SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT
+ * NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ * PARTICULAR PURPOSE. THE SOFTWARE PROVIDED HEREUNDER IS PROVIDED "AS IS". SHIV
+ * NADAR UNIVERSITY HAS NO OBLIGATION TO PROVIDE MAINTENANCE, SUPPORT, UPDATES,
+ * ENHANCEMENTS, OR MODIFICATIONS.
+ */
+/**
+ * @file CurrentSource.cpp
+ * @brief Implementation of the `CurrentSource` class declared in
+ * CurrentSource.hpp.
+ *
+ * Provides the parsing factory and DC stamping behavior for an independent
+ * current source element. For DC Modified Nodal Analysis (MNA) an ideal
+ * current source contributes only to the RHS current injection vector.
+ */
+
 #include "CurrentSource.hpp"
 
 #include <memory>
@@ -9,7 +37,7 @@
 std::shared_ptr<CircuitElement> CurrentSource::parse(
     Parser& parser, const std::vector<std::string>& tokens, int lineNumber)
 {
-    // Valid token counts: 4 or 5 (for optional group)
+    // Accept either 4 tokens (standard) or 5 tokens (optional group)
     if (!parser.validateTokens(tokens, 4, lineNumber) &&
         !parser.validateTokens(tokens, 5, lineNumber)) {
         std::cerr << "Error: Invalid current source definition at line "
@@ -41,54 +69,14 @@ std::shared_ptr<CircuitElement> CurrentSource::parse(
     return element;
 }
 
-// void CurrentSource::stamp(std::vector<std::vector<double>>& mna,
-//                           std::vector<double>& rhs,
-//                           std::map<std::string, int>& indexMap)
-// {
-//     if (group == Group::G1) {
-//         if (nodeA.compare("0") == 0) {
-//             int vminus = indexMap[nodeB];
-//             rhs[vminus] += value;
-//         } else if (nodeB.compare("0") == 0) {
-//             int vplus = indexMap[nodeA];
-//             rhs[vplus] -= value;
-//         } else {
-//             int vplus = indexMap[nodeA];
-//             int vminus = indexMap[nodeB];
-//             rhs[vplus] -= value;
-//             rhs[vminus] += value;
-//         }
-//     } else {
-//         if (nodeA.compare("0") == 0) {
-//             int vminus = indexMap[nodeB];
-//             int i = indexMap[name];
-//             mna[vminus][i] = -1.0;
-//             mna[i][i] = +1.0;
-//             rhs[i] = value;
-//         } else if (nodeB.compare("0") == 0) {
-//             int vplus = indexMap[nodeA];
-//             int i = indexMap[name];
-//             mna[vplus][i] = +1.0;
-//             mna[i][i] = +1.0;
-//             rhs[i] = value;
-//         } else {
-//             int vplus = indexMap[nodeA];
-//             int vminus = indexMap[nodeB];
-//             int i = indexMap[name];
-//             mna[vplus][i] = +1.0;
-//             mna[vminus][i] = -1.0;
-//             mna[i][i] = +1.0;
-//             rhs[i] = value;
-//         }
-//     }
-// }
-
 void CurrentSource::stamp(std::vector<std::vector<double>>& mna,
                           std::vector<double>& rhs,
                           std::map<std::string, int>& indexMap)
 {
-    // For DC MNA, current sources only affect the RHS vector.
-    // No new unknowns, no matrix stamp.
+    // DC stamping: ideal current source injects current into RHS only.
+    // Mark unused parameter to avoid warnings.
+    (void)mna;
+
     if (nodeA != "0") {
         int vplus = indexMap[nodeA];
         rhs[vplus] -= value;

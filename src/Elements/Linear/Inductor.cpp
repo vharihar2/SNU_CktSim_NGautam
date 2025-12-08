@@ -1,11 +1,43 @@
+/*
+ * Copyright (c) 2022, Shiv Nadar University, Delhi NCR, India. All Rights
+ * Reserved. Permission to use, copy, modify and distribute this software for
+ * educational, research, and not-for-profit purposes, without fee and without a
+ * signed license agreement, is hereby granted, provided that this paragraph and
+ * the following two paragraphs appear in all copies, modifications, and
+ * distributions.
+ *
+ * IN NO EVENT SHALL SHIV NADAR UNIVERSITY BE LIABLE TO ANY PARTY FOR DIRECT,
+ * INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST
+ * PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE.
+ *
+ * SHIV NADAR UNIVERSITY SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT
+ * NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ * PARTICULAR PURPOSE. THE SOFTWARE PROVIDED HEREUNDER IS PROVIDED "AS IS". SHIV
+ * NADAR UNIVERSITY HAS NO OBLIGATION TO PROVIDE MAINTENANCE, SUPPORT, UPDATES,
+ * ENHANCEMENTS, OR MODIFICATIONS.
+ */
+/**
+ * @file Inductor.cpp
+ * @brief Implementation of the `Inductor` class declared in Inductor.hpp.
+ *
+ * Provides parsing, DC stamping, transient companion computation and stamping,
+ * and state-update logic for the linear inductor element. Comments are kept
+ * short and focused on the implementation.
+ */
+
 #include "Inductor.hpp"
+
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
 
 #include "Parser.hpp"
 
 std::shared_ptr<CircuitElement> Inductor::parse(
     Parser& parser, const std::vector<std::string>& tokens, int lineNumber)
 {
-    // Inductors are always group 2
+    // Expect: Lname nodeA nodeB value
     if (!parser.validateTokens(tokens, 4, lineNumber)) {
         std::cerr << "Error: Invalid inductor definition at line " << lineNumber
                   << std::endl;
@@ -40,6 +72,8 @@ void Inductor::stamp(std::vector<std::vector<double>>& mna,
                      std::vector<double>& rhs,
                      std::map<std::string, int>& indexMap)
 {
+    // DC stamp: introduce branch-current unknown coupling for Group-2
+    // inductors.
     if (nodeA == "0") {
         int vminus = indexMap[nodeB];
         int i = indexMap[name];
@@ -61,46 +95,38 @@ void Inductor::stamp(std::vector<std::vector<double>>& mna,
     }
 }
 
-// Precompute TR companion parameters for inductor
-// Geq = h / (2*L)
+// Compute trapezoidal-rule companion parameters for timestep h.
+// Geq = h / (2 * L)
 // Ieq = i_prev + Geq * u_prev
 void Inductor::computeCompanion(double h)
 {
-    // Guard against invalid timestep
     if (h <= 0.0) {
         Geq = 0.0;
         Ieq = 0.0;
         return;
     }
 
-    // 'value' stores the inductance L
-    Geq = h / (2.0 * value);      // Geq = h / (2L)
-    Ieq = i_prev + Geq * u_prev;  // Ieq = i_n + Geq * u_n
+    // 'value' stores inductance L
+    Geq = h / (2.0 * value);
+    Ieq = i_prev + Geq * u_prev;
 }
 
-// Stamp the TR companion for the inductor.
-// This follows the repo's Group-2 branch-current stamp pattern
-// and adds the companion series-equation:
-//   v_{n+1} - (1/Geq) * i_{n+1} = - Ieq / Geq
-// which yields branch-diagonal term mna[i][i] += -1/Geq and rhs[i] += -Ieq/Geq.
-//
-// Preconditions: computeCompanion(h) has been called to set Geq and Ieq.
 void Inductor::stampTransient(std::vector<std::vector<double>>& mna,
                               std::vector<double>& rhs,
                               std::map<std::string, int>& indexMap)
 {
-    // If Geq is zero (e.g., h==0), skip companion stamping to avoid
-    // div-by-zero.
+    // If Geq is zero (e.g., h<=0) skip companion stamping.
     if (Geq == 0.0) return;
 
-    // series-equivalent 'resistance' for branch equation
-    double Rseries = 1.0 / Geq;  // R = 1/Geq
+    // Series-equivalent resistance for the branch equation
+    double Rseries = 1.0 / Geq;
 
-    // Locate indices
+    // Branch-current index if present
     int i = -1;
     auto it_i = indexMap.find(name);
     if (it_i != indexMap.end()) i = it_i->second;
 
+    // Node indices (-1 => ground/missing)
     int vplus = -1;
     int vminus = -1;
     if (nodeA != "0") {
@@ -112,68 +138,56 @@ void Inductor::stampTransient(std::vector<std::vector<double>>& mna,
         if (it != indexMap.end()) vminus = it->second;
     }
 
-    // Coupling entries: same pattern as existing Inductor::stamp (node <->
-    // branch current)
+    // If branch-current unknown exists, stamp series branch form
     if (i != -1) {
         if (vplus != -1) {
             mna[vplus][i] += 1.0;
             mna[i][vplus] += 1.0;
         }
         if (vminus != -1) {
-            // note: nodeB contribution has negative sign in original stamp
             mna[vminus][i] += -1.0;
             mna[i][vminus] += -1.0;
         }
 
-        // Add branch diagonal and RHS based on companion algebra:
-        // mna[i][i] += -Rseries  (following the repo's convention: mna[i][i] -=
-        // R for series R)
+        // Branch diagonal (series R) and RHS branch injection
         mna[i][i] += -Rseries;
-
-        // RHS for the branch equation: -Ieq / Geq
         double rhs_branch = -Ieq / Geq;
         rhs[i] += rhs_branch;
+        return;
+    }
+
+    // Fallback: stamp Norton equivalent between nodes
+    auto idx = [&](const std::string& node) -> int {
+        if (node == "0") return -1;
+        auto it = indexMap.find(node);
+        return (it == indexMap.end()) ? -1 : it->second;
+    };
+
+    int na = idx(nodeA);
+    int nb = idx(nodeB);
+    if (na == -1 && nb == -1) {
+        return;
+    } else if (na == -1) {
+        mna[nb][nb] += Geq;
+        rhs[nb] += Ieq;
+    } else if (nb == -1) {
+        mna[na][na] += Geq;
+        rhs[na] -= Ieq;
     } else {
-        // If branch-current index is missing, fall back to stamping Geq as
-        // Norton between nodes (rare if parser is consistent). Use node-based
-        // Norton: stamp Geq between nodeA-nodeB
-        auto idx = [&](const std::string& node) -> int {
-            if (node == "0") return -1;
-            auto it = indexMap.find(node);
-            return (it == indexMap.end()) ? -1 : it->second;
-        };
-        int na = idx(nodeA);
-        int nb = idx(nodeB);
-        if (na == -1 && nb == -1) {
-            // nothing to stamp
-            return;
-        } else if (na == -1) {
-            mna[nb][nb] += Geq;
-            rhs[nb] += Ieq;  // sign consistent with earlier convention for
-                             // Norton stamping
-        } else if (nb == -1) {
-            mna[na][na] += Geq;
-            rhs[na] -= Ieq;
-        } else {
-            mna[na][na] += Geq;
-            mna[na][nb] -= Geq;
-            mna[nb][na] -= Geq;
-            mna[nb][nb] += Geq;
-            rhs[na] -= Ieq;
-            rhs[nb] += Ieq;
-        }
+        mna[na][na] += Geq;
+        mna[na][nb] -= Geq;
+        mna[nb][na] -= Geq;
+        mna[nb][nb] += Geq;
+        rhs[na] -= Ieq;
+        rhs[nb] += Ieq;
     }
 }
 
-// Update inductor state from the solution vector x.
-// For Group-2 (branch-current unknown present) we read i_{n+1} directly from
-// the solution. We also compute u_{n+1} = vplus - vminus and store it into
-// u_prev.
 void Inductor::updateStateFromSolution(
     const Eigen::Ref<const Eigen::VectorXd>& x,
     const std::map<std::string, int>& indexMap)
 {
-    // Read node voltages
+    // Read node voltages (ground/missing -> 0)
     double vplus = 0.0;
     double vminus = 0.0;
 
@@ -189,14 +203,13 @@ void Inductor::updateStateFromSolution(
     double u_n1 = vplus - vminus;
     u_prev = u_n1;
 
-    // Prefer reading branch current variable if present
+    // Prefer reading branch current if available
     auto it_i = indexMap.find(name);
     if (it_i != indexMap.end()) {
         int i_index = it_i->second;
-        i_prev = x[i_index];  // i_{n+1}
+        i_prev = x[i_index];
     } else {
-        // Fallback: compute i_{n+1} from companion relation if branch unknown
-        // not present: i_{n+1} = Geq * u_{n+1} + Ieq
+        // Fallback: compute from companion relation
         i_prev = Geq * u_n1 + Ieq;
     }
 }

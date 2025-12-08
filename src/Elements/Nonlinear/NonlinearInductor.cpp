@@ -1,4 +1,33 @@
+/*
+ * Copyright (c) 2022, Shiv Nadar University, Delhi NCR, India. All Rights
+ * Reserved. Permission to use, copy, modify and distribute this software for
+ * educational, research, and not-for-profit purposes, without fee and without a
+ * signed license agreement, is hereby granted, provided that this paragraph and
+ * the following two paragraphs appear in all copies, modifications, and
+ * distributions.
+ *
+ * IN NO EVENT SHALL SHIV NADAR UNIVERSITY BE LIABLE TO ANY PARTY FOR DIRECT,
+ * INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST
+ * PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE.
+ *
+ * SHIV NADAR UNIVERSITY SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT
+ * NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ * PARTICULAR PURPOSE. THE SOFTWARE PROVIDED HEREUNDER IS PROVIDED "AS IS". SHIV
+ * NADAR UNIVERSITY HAS NO OBLIGATION TO PROVIDE MAINTENANCE, SUPPORT, UPDATES,
+ * ENHANCEMENTS, OR MODIFICATIONS.
+ */
+/**
+ * @file NonlinearInductor.cpp
+ * @brief Implementation of NonlinearInductor (nonlinear flux-based inductor).
+ *
+ * Implements per-iterate companion linearization, transient stamping, state
+ * update, diagnostics, and checkpoint/restore helpers. Inline comments are
+ * concise; API-level documentation is in the header.
+ */
+
 #include "NonlinearInductor.hpp"
+
+#include <cmath>
 
 #include "../lib/external/Eigen/Dense"
 #include "CircuitElement.hpp"
@@ -12,10 +41,9 @@ void NonlinearInductor::computeCompanion(double h)
         return;
     }
 
-    // linear fallback using stored phi_prev_ and i_prev_ (model derivative
-    // evaluated at previous current)
+    // Fallback companion linearized at previous state
     const double dphidi = model_->dphidi(i_prev_);
-    Geq_ = h / (2.0 * dphidi);  // Geq = h / (2 * dphidi)
+    Geq_ = h / (2.0 * dphidi);
     Ieq_ = i_prev_ + Geq_ * u_prev_;
 }
 
@@ -29,14 +57,15 @@ void NonlinearInductor::computeCompanionIter(
         return;
     }
 
-    // get branch current guess i_k if available
+    // Branch-current guess: use solution if present, otherwise fallback to
+    // i_prev_
     double i_k = i_prev_;
     auto it_i = indexMap.find(name);
     if (it_i != indexMap.end()) {
         i_k = xk[it_i->second];
     }
 
-    // node voltages (used for fallback or u_prev reference)
+    // Node voltages (ground -> 0)
     auto idx = [&](const std::string &node) -> int {
         if (node == "0") return -1;
         auto it = indexMap.find(node);
@@ -51,25 +80,22 @@ void NonlinearInductor::computeCompanionIter(
     if (nidx != -1) vminus = xk[nidx];
     double u_k = vplus - vminus;
 
-    // evaluate model at i_k
+    // Evaluate model and clamp derivative
     const double phi_k = model_->phi(i_k);
     const double dphidi_k = model_->dphidi(i_k);
 
-    // Geq and Rseries follow dual of capacitor formulas
-    // Safety: clamp derivative to avoid divide-by-zero / extreme values
     double dphidi_safe = dphidi_k;
     const double minDeriv = 1e-12;
     if (std::abs(dphidi_safe) < minDeriv)
         dphidi_safe = (dphidi_safe >= 0.0) ? minDeriv : -minDeriv;
 
-    // compute temporaries and validate
     double Geq_temp = h / (2.0 * dphidi_safe);
     double Ieq_temp =
         i_k - (phi_k - phi_prev_) / dphidi_safe + Geq_temp * u_prev_;
 
     const double maxGeq = 1e12;
     if (!std::isfinite(Geq_temp) || std::abs(Geq_temp) > maxGeq) {
-        return;  // keep previous values if new ones are invalid
+        return;
     }
     if (!std::isfinite(Ieq_temp)) {
         return;
@@ -116,8 +142,7 @@ void NonlinearInductor::stampTransient(std::vector<std::vector<double>> &mna,
         double rhs_branch = -Ieq_ / Geq_;
         rhs[i_index] += rhs_branch;
     } else {
-        // fallback to node-based Norton-style stamping if branch unknown is
-        // missing
+        // Norton-style fallback if branch unknown is missing
         auto idx = [&](const std::string &node) -> int {
             if (node == "0") return -1;
             auto it = indexMap.find(node);
