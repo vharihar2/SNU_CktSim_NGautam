@@ -19,8 +19,14 @@
 
 /**
  * @file Node.hpp
+ * @brief Node representation used by the circuit connectivity graph.
  *
- * @brief Contains the definition of the Node class
+ * This header declares the `Node` class used to build the circuit topology
+ * graph. Nodes hold adjacency lists of `Edge` objects (each referencing a
+ * `CircuitElement`) and provide a traversal routine used during MNA assembly.
+ *
+ * The Node API is intentionally minimal: the traversal logic calls element
+ * stamping routines and performs a depth-first walk of the connectivity graph.
  */
 
 #pragma once
@@ -30,77 +36,47 @@
 #include <string>
 #include <vector>
 
-#include "Edge.hpp"
-
-// Forward Declaration
+// Forward declaration to keep header lightweight.
 class Edge;
 
 /**
  * @class Node
+ * @brief Graph node representing an electrical node in the circuit.
  *
- * @brief Represents a node in the graph
- *
- * Each node represents a circuit element that is connected between two Node.
- * */
-
+ * A `Node` connects to zero or more `Edge` instances. Each edge references a
+ * circuit element and the adjacent node. The `traverse` method visits the
+ * connected subgraph and invokes stamping routines on elements to populate the
+ * MNA matrix and RHS vector.
+ */
 class Node
 {
    public:
-    std::string name; /**< Name of the node */
-    std::vector<std::shared_ptr<Edge>>
-        edges;      /**< List of edges connected to the node */
-    bool processed; /**< Flag value to know whether it is processed */
+    /** @brief Node name (unique identifier, e.g., \"0\" for ground). */
+    std::string name;
+
+    /** @brief Adjacency list of edges attached to this node. */
+    std::vector<std::shared_ptr<Edge>> edges;
+
+    /** @brief Traversal flag; true when the node has been visited. */
+    bool processed = false;
 
     /**
-     * @brief		Traverses the map (graph of the circuit) and
-     *				populates the MNA and RHS matrices
+     * @brief Traverse the connectivity graph starting from this node.
      *
-     * @param	[indexMap] map<string, int>
+     * This routine performs a depth-first traversal over adjacent nodes,
+     * invoking `stamp` or `stampTransient` on each unprocessed element as it
+     * encounters edges. Use `isTransient` to select transient stamping paths.
      *
-     * @param	[out] mna The left hand side matrix for the modified
-     *nodal analysis equation
+     * The function updates the provided MNA matrix and RHS vector in-place.
      *
-     * @param [out] rhs An 1 x n vector representing  the
-     *independent voltage sources
+     * @param indexMap Mapping from node/element names to indices in
+     * `mna`/`rhs`.
+     * @param mna Modified Nodal Analysis matrix to populate (mutated in-place).
+     * @param rhs Right-hand side vector to populate (mutated in-place).
+     * @param isTransient If true, use transient stamping (`stampTransient`);
+     * otherwise use DC `stamp`.
      */
     void traverse(std::map<std::string, int> &indexMap,
                   std::vector<std::vector<double>> &mna,
-                  std::vector<double> &rhs);
-
-    static void handleResistor(const std::shared_ptr<Edge> &edge,
-                               std::map<std::string, int> &indexMap,
-                               std::vector<std::vector<double>> &mna,
-                               std::vector<double> &rhs);
-
-    static void handleCapacitor(const std::shared_ptr<Edge> &edge,
-                                std::map<std::string, int> &indexMap,
-                                std::vector<std::vector<double>> &mna,
-                                std::vector<double> &rhs);
-
-    static void handleInductor(const std::shared_ptr<Edge> &edge,
-                               std::map<std::string, int> &indexMap,
-                               std::vector<std::vector<double>> &mna,
-                               std::vector<double> &rhs);
-
-    static void handleCurrentSource(const std::shared_ptr<Edge> &edge,
-                                    std::map<std::string, int> &indexMap,
-                                    std::vector<std::vector<double>> &mna,
-                                    std::vector<double> &rhs);
-
-    static void handleVoltageSource(const std::shared_ptr<Edge> &edge,
-                                    std::map<std::string, int> &indexMap,
-                                    std::vector<std::vector<double>> &mna,
-                                    std::vector<double> &rhs);
-
-    static void handleDepVoltageSource(const std::shared_ptr<Edge> &edge,
-                                       std::map<std::string, int> &indexMap,
-                                       std::vector<std::vector<double>> &mna,
-                                       std::vector<double> &rhs);
-
-    static void handleDepCurrentSource(const std::shared_ptr<Edge> &edge,
-                                       std::map<std::string, int> &indexMap,
-                                       std::vector<std::vector<double>> &mna,
-                                       std::vector<double> &rhs);
-
-    // Add more handler declarations as needed for other element types
+                  std::vector<double> &rhs, bool isTransient = false);
 };
