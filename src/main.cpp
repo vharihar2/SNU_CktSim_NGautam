@@ -45,6 +45,8 @@ static void printHelp(const char *prog)
     std::cout << "  --diag-file <file>        Diagnostics output file (default "
                  "diagnostics.log)\n";
     std::cout << "  --diag-verbose            Verbose diagnostics\n";
+    std::cout
+        << "  --zero-init               Skip DC init; zero dynamic states\n";
     std::cout << "  --help                    Show this help message\n";
 }
 
@@ -58,6 +60,7 @@ int main(int argc, char *argv[])
         {"max-backtracks", required_argument, 0, 0},
         {"diag-file", required_argument, 0, 0},
         {"diag-verbose", no_argument, 0, 0},
+        {"zero-init", no_argument, 0, 0},
         {"help", no_argument, 0, 'h'},
         {0, 0, 0, 0}};
 
@@ -81,6 +84,8 @@ int main(int argc, char *argv[])
                 options.diagFile = std::string(optarg);
             else if (name == "diag-verbose")
                 options.diagVerbose = true;
+            else if (name == "zero-init")
+                options.zeroInit = true;
         }
     }
 

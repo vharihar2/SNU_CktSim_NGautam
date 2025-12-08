@@ -9,11 +9,9 @@ void Capacitor::stamp(std::vector<std::vector<double>>& mna,
                       std::vector<double>& rhs,
                       std::map<std::string, int>& indexMap)
 {
-    // Group 1: Capacitor is open circuit in DC, so do nothing
+    // Open circuit in DC; nothing to stamp.
     if (group == Group::G1) {
-    }
-    // Group 2: For DC, typically also open, but if you need a placeholder:
-    else {
+    } else {
     }
 }
 
@@ -52,29 +50,21 @@ std::shared_ptr<CircuitElement> Capacitor::parse(
     return element;
 }
 
-// Copy-paste-ready implementation:
-
-// Compute TR companion parameters for this capacitor for timestep h.
-// After this call:
-//   Geq = 2*C / h
-//   Ieq = -i_prev - Geq * v_prev
-// where v_prev and i_prev are the stored state at time n.
+// Compute trapezoidal-rule companion parameters for timestep h.
+// Geq = 2 * C / h
+// Ieq = Geq * v_prev - i_prev
 void Capacitor::computeCompanion(double h)
 {
-    // Guard against invalid timestep
+    // Protect against non-positive timestep.
     if (h <= 0.0) {
-        // Keep previous Geq/Ieq (or set to 0), but avoid division by zero.
         Geq = 0.0;
         Ieq = 0.0;
         return;
     }
 
-    // value is the capacitance C (as used across the codebase)
-    Geq = 2.0 * value / h;  // Geq = 2*C / h
-    // Correct trapezoidal Norton companion current sign.
-    // Ieq should be Geq*v_n - i_n so that:
-    //   i_{n+1} = Geq*v_{n+1} - Ieq = i_n + Geq*(v_{n+1}-v_n)
-    Ieq = Geq * v_prev - i_prev;  // Ieq = Geq*v_n - i_n
+    // Compute Geq and Ieq using trapezoidal companion.
+    Geq = 2.0 * value / h;
+    Ieq = Geq * v_prev - i_prev;
 }
 
 void Capacitor::stampTransient(std::vector<std::vector<double>>& mna,

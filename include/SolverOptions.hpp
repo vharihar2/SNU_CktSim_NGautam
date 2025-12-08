@@ -22,6 +22,11 @@ struct SolverOptions
     // candidate solution produces values larger than this, the solver will
     // treat the candidate as invalid to avoid committing divergent states.
     double maxState = 1e6;
+    // When true, skip the DC operating point initialization and start all
+    // dynamic element states (capacitor voltages / inductor currents) at
+    // zero. Useful for quick transient tests where DC initialization is
+    // undesirable.
+    bool zeroInit = false;
 
     // Validate and clamp obvious invalid values. Throws std::invalid_argument
     // on fatal configuration errors.

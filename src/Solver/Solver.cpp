@@ -265,14 +265,27 @@ int runTransient(Parser &parser,
     if (indexMap.empty()) makeIndexMap(indexMap, parser);
     if (nodeMap.empty()) makeGraph(nodeMap, parser);
 
-    // Initialize element states from DC operating point
-    Eigen::VectorXd x0 = computeOperatingPoint(parser, nodeMap, indexMap);
-
+    // Ensure indexMap/nodeMap populated, compute number of unknowns early so
+    // we can optionally perform a zero-initialization instead of the DC
+    // operating point.
     int n = static_cast<int>(indexMap.size());
     if (n == 0) {
         std::cout << "No unknowns in indexMap — nothing to simulate."
                   << std::endl;
         return 0;
+    }
+
+    // Initialize element states either from DC operating point or as zeros
+    // depending on the `zeroInit` option.
+    Eigen::VectorXd x0;
+    if (options.zeroInit) {
+        x0 = Eigen::VectorXd::Zero(n);
+        // Commit zero state to elements so their internal *_prev values are
+        // consistent with a zero-initialized run.
+        for (auto &el : parser.circuitElements)
+            if (el) el->updateStateFromSolution(x0, indexMap);
+    } else {
+        x0 = computeOperatingPoint(parser, nodeMap, indexMap);
     }
 
     // Newton/TR solver parameters

@@ -26,12 +26,14 @@
 #include "Parser.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <ostream>
 #include <sstream>
+#include <unordered_map>
 
 #include "Capacitor.hpp"
 #include "CircuitElement.hpp"
@@ -647,16 +649,99 @@ bool Parser::validateNodes(const std::string& nodeA, const std::string& nodeB,
 double Parser::parseValue(const std::string& valueStr, int lineNumber,
                           bool& valid)
 {
-    try {
-        double value = std::stod(valueStr);
-        valid = true;
-        return value;
-    } catch (const std::exception&) {
+    // Strict SPICE-style parsing:
+    // - Recognize common suffixes (T, G, MEG, K, M, U, N, P, F).
+    // - Require a non-empty mantissa.
+    // - Require that the mantissa is fully consumed by std::stod (no stray
+    //   characters like extra '.' or trailing digits) — i.e., the numeric
+    //   literal must be well-formed.
+    // - If a suffix exists, it must be one of the recognized suffixes and the
+    //   mantissa must also be a fully-formed numeric literal.
+    //
+    // This matches LTspice behavior where malformed numbers such as "1.2.3"
+    // are rejected.
+
+    if (valueStr.empty()) {
         std::cerr << "Line " << lineNumber << ": Invalid value '" << valueStr
                   << "'" << std::endl;
         valid = false;
         return 0.0;
     }
+
+    // Map of recognized suffixes (uppercase) -> multiplier
+    static const std::unordered_map<std::string, double> suffixMap = {
+        {"T", 1e12}, {"G", 1e9}, {"MEG", 1e6}, {"K", 1e3}, {"M", 1e-3},
+        {"U", 1e-6}, {"N", 1e-9}, {"P", 1e-12}, {"F", 1e-15}};
+
+    // Separate trailing alphabetic suffix (if any). We accept up to 3 letters
+    // (to support MEG). valueStr is uppercased by the caller earlier in the
+    // pipeline; be defensive and uppercase suffix here too.
+    size_t pos = valueStr.size();
+    while (pos > 0 && std::isalpha((unsigned char)valueStr[pos - 1])) --pos;
+
+    std::string mantissa = valueStr.substr(0, pos);
+    std::string suffix = valueStr.substr(pos);
+
+    // Mantissa must not be empty (e.g., "K" is invalid)
+    if (mantissa.empty()) {
+        std::cerr << "Line " << lineNumber << ": Invalid value '" << valueStr
+                  << "'" << std::endl;
+        valid = false;
+        return 0.0;
+    }
+
+    // Normalize suffix to uppercase (defensive)
+    for (auto& c : suffix) c = (char)std::toupper((unsigned char)c);
+
+    // Helper to parse a mantissa and require full consumption of the string
+    auto parseMantissaStrict = [&](const std::string& m, double &out) -> bool {
+        try {
+            size_t idx = 0;
+            out = std::stod(m, &idx);
+            // require std::stod consumed the whole mantissa string
+            if (idx != m.size()) {
+                return false;
+            }
+            return true;
+        } catch (const std::exception&) {
+            return false;
+        }
+    };
+
+    // If no suffix, parse mantissa strictly
+    if (suffix.empty()) {
+        double value = 0.0;
+        if (!parseMantissaStrict(mantissa, value)) {
+            std::cerr << "Line " << lineNumber << ": Invalid value '"
+                      << valueStr << "'" << std::endl;
+            valid = false;
+            return 0.0;
+        }
+        valid = true;
+        return value;
+    }
+
+    // Suffix present: must be recognized
+    auto it = suffixMap.find(suffix);
+    if (it == suffixMap.end()) {
+        std::cerr << "Line " << lineNumber << ": Unknown suffix '" << suffix
+                  << "' in value '" << valueStr << "'" << std::endl;
+        valid = false;
+        return 0.0;
+    }
+
+    // Parse mantissa strictly, then scale
+    double base = 0.0;
+    if (!parseMantissaStrict(mantissa, base)) {
+        std::cerr << "Line " << lineNumber << ": Invalid numeric part '"
+                  << mantissa << "' in '" << valueStr << "'" << std::endl;
+        valid = false;
+        return 0.0;
+    }
+
+    double value = base * it->second;
+    valid = true;
+    return value;
 }
 
 // void Parser::parseResistor(const std::vector<std::string>& tokens,
