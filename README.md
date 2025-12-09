@@ -1,3 +1,4 @@
+**_Imported on Dec 9th 2025 from the Git repo (https://github.com/Gautam0507/SNU_Spice) of my students N. Gautam) based on a BTech Project he did under me in MO2025._**
 # SNU Spice
 
 SNU Spice is an electronic circuit simulator that uses Modified Nodal Analysis to analyze circuits containing resistors and independent or dependent voltage and current sources, with support for transient simulations and simple nonlinear capacitor/inductor models. The project was developed at Shiv Nadar University under the supervision of Prof. Venkatnarayan Hariharan as part of the Opportunities for Undergraduate Research Program (OUR20240023) and as the ECE498 Minor Project for the Electrical & Computer Engineering degree. The implementation follows approaches described in Farid N. Najm’s book "Circuit Simulation".
